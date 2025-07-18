@@ -9,8 +9,23 @@
 \description{
 More about what it does (maybe more than one line). Continuation lines should be indented.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/danigiro/FoRecoML}
+  \item Report bugs at \url{https://github.com/danigiro/FoRecoML/issues}
+}
+
+}
 \author{
-\strong{Maintainer}: Jane Doe \email{jane@example.com}
+\strong{Maintainer}: Daniele Girolimetto \email{daniele.girolimetto@unipd.it} (\href{https://orcid.org/0000-0001-9387-1232}{ORCID}) [funder]
+
+Authors:
+\itemize{
+  \item Jeroen Rombouts \email{b00469813@essec.edu} (\href{https://orcid.org/0000-0003-2255-4875}{ORCID}) [funder]
+  \item Ines Wilms \email{i.wilms@maastrichtuniversity.nl} (\href{https://orcid.org/0000-0003-3269-4601}{ORCID}) [funder]
+  \item Yangzhuoran Fin Yang \email{yangzhuoran.yang@maastrichtuniversity.nl} (\href{https://orcid.org/0000-0002-1232-8017}{ORCID}) [funder]
+}
 
 }
 \keyword{package}
