@@ -1,5 +1,5 @@
 #' @keywords package
-#' @aliases mlReco-package
+#' @aliases FoRecoML-package
 "_PACKAGE"
 
 #' @import Matrix FoReco
@@ -10,5 +10,7 @@
 #' @importFrom mlr3tuning tnr auto_tuner
 #' @importFrom stats na.omit setNames predict
 #' @importFrom methods as is
-#' @importFrom cli cli_abort
+#' @importFrom cli cli_abort cli_inform cli_warn
+#' @importFrom paradox to_tune
+#' @import mlr3learners
 NULL

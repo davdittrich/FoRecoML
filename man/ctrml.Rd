@@ -4,95 +4,232 @@
 \alias{ctrml}
 \title{Cross-temporal Reconciliation with Machine Learning}
 \usage{
-ctrml(
-  hat,
-  obs,
-  base,
-  agg_mat,
-  agg_order,
-  features = "all",
-  approach = "randomForest",
-  params = NULL,
-  tuning = NULL,
-  fit = NULL,
-  tew = "sum",
-  sntz = FALSE,
-  seed = NULL
-)
+ctrml(base, hat, obs, agg_mat, agg_order, features = "all",
+      approach = "randomForest", params = NULL, tuning = NULL,
+      fit = NULL, tew = "sum", sntz = FALSE, seed = NULL)
 }
 \arguments{
-\item{hat}{todo}
+\item{base}{A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
+forecasts to be reconciled; \eqn{n} is the total number of variables,
+\eqn{m} is the maximum aggregation order, and \eqn{k^\ast} is the sum of a
+chosen subset of the \eqn{p - 1} factors of \eqn{m} (excluding \eqn{m}
+itself), and \eqn{h} is the forecast horizon for the lowest frequency time
+series. The row identifies a time series, and the forecasts in each row are
+ordered from the lowest frequency (most temporally aggregated) to the
+highest frequency.}
 
-\item{obs}{todo}
+\item{hat}{A (\eqn{n \times N(k^\ast+m)}) numeric matrix containing the base
+forecasts ordered from lowest to highest frequency; \eqn{N} is the training
+length for the lowest frequency time series. The row identifies a time
+series, and the forecasts in each row are ordered from the lowest frequency
+(most temporally aggregated) to the highest frequency. These forecasts are
+used to train the ML approach.}
 
-\item{base}{todo}
+\item{obs}{A (\eqn{n_b \times Nm}) numeric matrix containing (observed)
+values for the highest frequency series (\eqn{k = 1}); \eqn{n_b} is the
+total number of high-frequency bottom variables. These values are used to
+train the ML approach.}
 
-\item{agg_mat}{todo}
+\item{agg_mat}{A (\eqn{n_a \times n_b}) numeric matrix representing the cross-sectional
+aggregation matrix. It maps the \eqn{n_b} bottom-level (free)
+variables into the \eqn{n_a} upper (constrained) variables.}
 
-\item{agg_order}{todo}
+\item{agg_order}{Highest available sampling frequency per seasonal cycle (max. order
+of temporal aggregation, \eqn{m}), or a vector representing a subset of \eqn{p} factors
+of \eqn{m}.}
 
-\item{features}{todo}
+\item{features}{Character string specifying which features are used for model
+training. Options include "\code{hfbts}", "\code{hfts}", "\code{bts}",
+"\code{str}", "\code{str-hfbts}", "\code{str-bts}", "\code{all}"
+(\emph{default}), "\code{rtw-full}", and "\code{rtw-comp}".}
 
-\item{approach}{todo}
+\item{approach}{Character string specifying the machine learning method used
+for reconciliation. Options are:
+\itemize{
+\item "\code{randomForest}" (\emph{default}): Random Forest algorithm
+(see the \pkg{randomForest} package).
+\item "\code{xgboost}": Extreme Gradient Boosting (see the \pkg{xgboost}
+package).
+\item "\code{lightgbm}": Light Gradient Boosting Machine (see the
+\pkg{lightgbm} package).
+\item "\code{mlr3}": Any regression learner available in the \pkg{mlr3}
+package. The learner must be specified via \code{params}, e.g.
+\code{params = list(.key = "regr.ranger")}.
+}}
 
-\item{params}{todo}
+\item{params}{Optional list of additional parameters passed to the chosen
+ML approach These may include algorithm-specific hyperparameters for
+\pkg{randomForest}, \pkg{xgboost}, \pkg{lightgbm}, or learner options for
+\pkg{mlr3}. When \code{approach = "mlr3"}, the list must include
+\code{.key} to select the learner (e.g. \code{.key = "regr.xgboost"},
+\emph{default}).}
 
-\item{tuning}{todo (see [mlr3tuning::auto_tuner], except 'learner')}
+\item{tuning}{Optional list specifying tuning options when using the
+\link[mlr3tuning:mlr3tuning-package]{mlr3tuning::mlr3tuning} framework (e.g., terminators, search spaces). The argument
+format follows \link[mlr3tuning:auto_tuner]{mlr3tuning::auto_tuner}, except that the learner is set
+through \code{params}.}
 
-\item{fit}{todo}
+\item{fit}{A pre-trained ML reconciliation model (see,
+\link{extract_reconciled_ml}). If supplied, training data (\code{hat},
+\code{obs}) are not required.}
 
-\item{tew}{todo}
+\item{tew}{A string specifying the type of temporal aggregation. Options include:
+"\code{sum}" (simple summation, \emph{default}), "\code{avg}" (average),
+"\code{first}" (first value of the period), and "\code{last}"
+(last value of the period).}
 
-\item{sntz}{todo}
+\item{sntz}{Logical. If \code{TRUE}, enforces non-negativity on reconciled
+forecasts (\emph{default} \code{FALSE}) using the heuristic
+"set-negative-to-zero" (Di Fonzo and Girolimetto, 2023).}
 
-\item{seed}{todo}
+\item{seed}{Optional integer seed for reproducibility.}
 }
 \value{
-todo
+If \code{base} is provided, returns a cross-temporal reconciled
+forecast matrix with the same dimensions, along with attributes containing
+the fitted model and reconciliation settings (see, \link[FoReco:recoinfo]{FoReco::recoinfo} and
+\link{extract_reconciled_ml}). If only models are trained (omitting
+\code{base}), returns a fitted object that can be reused for reconciliation
+on new base forecasts (see, \link{extract_reconciled_ml}).
 }
 \description{
-Cross-temporal Reconciliation with Machine Learning
+TODO
 }
 \examples{
-hat <- rnorm(7*10, rep(c(20, 10, 5), 10*c(1, 2, 4)))
-obs <- rnorm(4*10, 5)
-base <- rnorm(7*3, rep(c(20, 10, 5), 3*c(1, 2, 4)))
+# m: quarterly temporal aggregation order
+m <- 4
+te_set <- tetools(m)$set
 
-base <- rbind(base+100, base*10, base)
-obs <- rbind(obs*10, obs)
-hat <- rbind(hat+100, hat*10, hat)
-m <- 4 # from quarterly to annual temporal aggregation
-reco <- ctrml(hat = hat, obs = obs, base = base, agg_order = m, tew = "sum",
-              agg_mat = t(c(1,1)), approach = "xgboost", seed = 123,
-              #params = list(.key = "regr.xgboost"),
-              features = "str")
+# agg_mat: simple aggregation matrix, A = B + C
+agg_mat <- t(c(1,1))
+dimnames(agg_mat) <- list("A", c("B", "C"))
 
-reco <- ctrml(hat = hat, obs = obs, base = base, agg_order = m, tew = "sum",
-              agg_mat = t(c(1,1)), approach = "lightgbm", seed = 123,
-              #params = list(.key = "regr.xgboost"),
-              features = "str")
+# te_fh: minimum forecast horizon per temporal aggregate
+te_fh <- m/te_set
 
-# tweedie xgboost
-reco <- ctrml(hat = hat, obs = obs, base = base, agg_order = m, tew = "sum",
-              agg_mat = t(c(1,1)), approach = "xgboost", seed = 123,
-              params =  list(
-                eta = 0.3,
-                colsample_bytree = 1,
-                min_child_weight = 1,
-                max_depth = 6,
-                gamma = 0,
-                subsample = 1,
-                objective = "reg:tweedie",
-                tweedie_variance_power = 1.5
-              ),
-              features = "str")
+# N_hat: dimension for the lowest-frequency (k = m) training set
+N_hat <- 16
 
-# Tuning mlr3
-reco <- ctrml(hat = hat, obs = obs, base = base, agg_order = m, tew = "sum",
-              agg_mat = t(c(1,1)), approach = "mlr3", seed = 123,
-              params = list(.key = "regr.ranger",
-                            mtry = paradox::to_tune(paradox::p_int(1, 4))),
-              tuning = list(terminator = mlr3tuning::trm("evals", n_evals = 10)),
+# bts_mean: mean for the Normal draws used to simulate data
+bts_mean <- 5
+
+# hat: a training (base forecasts) feautures matrix
+hat <- rbind(
+  rnorm(sum(te_fh)*N_hat, rep(2*te_set*bts_mean, N_hat*te_fh)),  # Series A
+  rnorm(sum(te_fh)*N_hat, rep(te_set*bts_mean,  N_hat*te_fh)),   # Series B
+  rnorm(sum(te_fh)*N_hat, rep(te_set*bts_mean,  N_hat*te_fh))    # Series C
+)
+rownames(hat) <- c("A", "B", "C")
+
+# obs: (observed) values for the highest-frequency bottom-level series
+# (B and C with k = 1)
+obs <- rbind(
+  rnorm(m*N_hat, bts_mean),  # Observed for series B
+  rnorm(m*N_hat, bts_mean)   # Observed for series C
+)
+rownames(obs) <- c("B", "C")
+
+
+# h: base forecast horizon at the lowest-frequency series (k = m)
+h <- 2
+
+# base: base forecasts matrix
+base <- rbind(
+  rnorm(sum(te_fh)*h, rep(2*te_set*bts_mean, h*te_fh)),  # Base for A
+  rnorm(sum(te_fh)*h, rep(te_set*bts_mean,  h*te_fh)),   # Base for B
+  rnorm(sum(te_fh)*h, rep(te_set*bts_mean,  h*te_fh))    # Base for C
+)
+rownames(base) <- c("A", "B", "C")
+
+##########################################################################
+# Different ML approaches
+##########################################################################
+# XGBoost Reconciliation (xgboost pkg)
+reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
+              agg_mat = agg_mat, approach = "xgboost", seed = 123,
               features = "rtw-full")
 
+# XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
+reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
+              agg_mat = agg_mat, approach = "xgboost", seed = 123,
+              params =  list(
+                eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
+                max_depth = 6, gamma = 0, subsample = 1,
+                objective = "reg:tweedie", # Tweedie regression objective
+                tweedie_variance_power = 1.5 # Tweedie power parameter
+              ),
+              features = "rtw-full")
+
+# LightGBM Reconciliation (lightgbm pkg)
+reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
+              agg_mat = agg_mat, approach = "lightgbm", seed = 123,
+              features = "rtw-full")
+
+# Random Forest Reconciliation (randomForest pkg)
+reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
+              agg_mat = agg_mat, approach = "randomForest", seed = 123,
+              features = "rtw-full")
+
+# Using the mlr3 pkg:
+# With 'params = list(.key = mlr_learners)' we can specify different
+# mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
+# "regr.xgboost" for XGBoost, and others.
+reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
+              agg_mat = agg_mat, approach = "mlr3", seed = 123,
+              # choose mlr3 learner (here Random Forest via ranger)
+              params = list(.key = "regr.ranger"),
+              features = "rtw-full")
+\dontrun{
+# With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
+# We can reduce excessive logging by calling:
+if(requireNamespace("lgr", quietly = TRUE)){
+  lgr::get_logger("mlr3")$set_threshold("warn")
+  lgr::get_logger("bbotk")$set_threshold("warn")
+}
+reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
+              agg_mat = agg_mat, approach = "mlr3", seed = 123,
+              params = list(
+                .key = "regr.ranger",
+                # number of features tried at each split
+                mtry = paradox::to_tune(paradox::p_int(1, 4))
+              ),
+              tuning = list(
+                # stop after 10 evaluations
+                terminator = mlr3tuning::trm("evals", n_evals = 10)
+              ),
+              features = "rtw-full")
+}
+##########################################################################
+# Usage with pre-trained models
+##########################################################################
+# Pre-trained machine learning models (e.g., omit the base param)
+mdl <- ctrml(hat = hat, obs = obs,
+             agg_order = m, agg_mat = agg_mat, approach = "lightgbm",
+             seed = 123, features = "rtw-full")
+
+# Pre-trained machine learning models with base param
+reco <- ctrml(base = base, hat = hat, obs = obs,
+              agg_order = m, agg_mat = agg_mat, approach = "lightgbm",
+              seed = 123, features = "rtw-full")
+mdl2 <- extract_reconciled_ml(reco)
+
+# New base forecasts matrix
+base_new <- rbind(
+  rnorm(sum(te_fh)*h, rep(2*te_set*bts_mean, h*te_fh)),  # Base for A
+  rnorm(sum(te_fh)*h, rep(te_set*bts_mean,  h*te_fh)),   # Base for B
+  rnorm(sum(te_fh)*h, rep(te_set*bts_mean,  h*te_fh))    # Base for C
+)
+reco_new <- ctrml(base = base_new, fit = mdl, agg_order = m,
+                  agg_mat = agg_mat)
+
+}
+\references{
+Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
+solar forecasts, \emph{Solar Energy}, 251, 13–29.
+\doi{10.1016/j.solener.2023.01.003}
+
+Rombouts, J., Ternes, M., and Wilms, I. (2025). Cross-temporal forecast
+reconciliation at digital platforms with machine learning.
+\emph{International Journal of Forecasting}, 41(1), 321-344.
+\doi{10.1016/j.ijforecast.2024.05.008}
 }

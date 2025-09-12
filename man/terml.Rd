@@ -4,62 +4,190 @@
 \alias{terml}
 \title{Temporal Reconciliation with Machine Learning}
 \usage{
-terml(
-  hat,
-  obs,
-  base,
-  agg_order,
-  features = "all",
-  approach = "randomForest",
-  params = NULL,
-  tuning = NULL,
-  fit = NULL,
-  tew = "sum",
-  sntz = FALSE,
-  seed = NULL
-)
+terml(base, hat, obs, agg_order, features = "all", approach = "randomForest",
+      params = NULL, tuning = NULL, fit = NULL, tew = "sum", sntz = FALSE,
+      seed = NULL)
 }
 \arguments{
-\item{hat}{todo}
+\item{base}{A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
+base forecasts to be reconciled, ordered from lowest to highest frequency.
+Here, \eqn{N} is the training length for the lowest frequency time series,
+\eqn{m} is the maximum aggregation order, and \eqn{k^\ast} is the sum of a
+chosen subset of the \eqn{p - 1} factors of \eqn{m} (excluding \eqn{m}
+itself).}
 
-\item{obs}{todo}
+\item{hat}{A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
+base forecasts ordered from lowest to highest frequency; \eqn{N} is the
+training length for the lowest frequency time series. These
+forecasts are used to train the ML approach.}
 
-\item{base}{todo}
+\item{obs}{A (\eqn{Nm \times 1}) numeric vector containing (observed) values
+for the highest frequency series (\eqn{k = 1}). These values are used to
+train the ML approach.}
 
-\item{agg_order}{todo}
+\item{agg_order}{Highest available sampling frequency per seasonal cycle (max. order
+of temporal aggregation, \eqn{m}), or a vector representing a subset of \eqn{p} factors
+of \eqn{m}.}
 
-\item{features}{todo}
+\item{features}{Character string specifying which features are used for model
+training. Options include "\code{hfts}", "\code{str}", "\code{str-hfts}",
+"\code{all}" (\emph{default}), and "\code{rtw}".}
 
-\item{approach}{todo}
+\item{approach}{Character string specifying the machine learning method used
+for reconciliation. Options are:
+\itemize{
+\item "\code{randomForest}" (\emph{default}): Random Forest algorithm
+(see the \pkg{randomForest} package).
+\item "\code{xgboost}": Extreme Gradient Boosting (see the \pkg{xgboost}
+package).
+\item "\code{lightgbm}": Light Gradient Boosting Machine (see the
+\pkg{lightgbm} package).
+\item "\code{mlr3}": Any regression learner available in the \pkg{mlr3}
+package. The learner must be specified via \code{params}, e.g.
+\code{params = list(.key = "regr.ranger")}.
+}}
 
-\item{params}{todo}
+\item{params}{Optional list of additional parameters passed to the chosen
+ML approach These may include algorithm-specific hyperparameters for
+\pkg{randomForest}, \pkg{xgboost}, \pkg{lightgbm}, or learner options for
+\pkg{mlr3}. When \code{approach = "mlr3"}, the list must include
+\code{.key} to select the learner (e.g. \code{.key = "regr.xgboost"},
+\emph{default}).}
 
-\item{tuning}{todo (see [mlr3tuning::auto_tuner], except 'learner')}
+\item{tuning}{Optional list specifying tuning options when using the
+\link[mlr3tuning:mlr3tuning-package]{mlr3tuning::mlr3tuning} framework (e.g., terminators, search spaces). The argument
+format follows \link[mlr3tuning:auto_tuner]{mlr3tuning::auto_tuner}, except that the learner is set
+through \code{params}.}
 
-\item{fit}{todo}
+\item{fit}{A pre-trained ML reconciliation model (see,
+\link{extract_reconciled_ml}). If supplied, training data (\code{hat},
+\code{obs}) are not required.}
 
-\item{tew}{todo}
+\item{tew}{A string specifying the type of temporal aggregation. Options include:
+"\code{sum}" (simple summation, \emph{default}), "\code{avg}" (average),
+"\code{first}" (first value of the period), and "\code{last}"
+(last value of the period).}
 
-\item{sntz}{todo}
+\item{sntz}{Logical. If \code{TRUE}, enforces non-negativity on reconciled
+forecasts (\emph{default} \code{FALSE}) using the heuristic
+"set-negative-to-zero" (Di Fonzo and Girolimetto, 2023).}
 
-\item{seed}{todo}
+\item{seed}{Optional integer seed for reproducibility.}
 }
 \value{
-Reconciled forecasts or Reconciled models
+If \code{base} is provided, returns a temporal reconciled forecast
+vector with the same dimensions, along with attributes containing the
+fitted model and reconciliation settings (see, \link[FoReco:recoinfo]{FoReco::recoinfo} and
+\link{extract_reconciled_ml}). If only models are trained (omitting
+\code{base}), returns a fitted object that can be reused for reconciliation
+on new base forecasts (see, \link{extract_reconciled_ml}).
 }
 \description{
-Temporal Reconciliation with Machine Learning
+TODO
 }
 \examples{
-set.seed(123)
-# (7 x 1) base forecasts vector (simulated), m = 4
+# m: quarterly temporal aggregation order
+m <- 4
+te_set <- tetools(m)$set
 
-hat <- rnorm(7*10, rep(c(20, 10, 5), 10*c(1, 2, 4)))
-obs <- rnorm(4*10, 5)
-base <- rnorm(7*2, rep(c(20, 10, 5), 2*c(1, 2, 4)))
+# te_fh: minimum forecast horizon per temporal aggregate
+te_fh <- m/te_set
 
-m <- 4 # from quarterly to annual temporal aggregation
-reco <- terml(hat = hat, obs = obs, base = base, agg_order = m,
-              features = "all")
+# N_hat: dimension for the lowest frequency (k = m) training set
+N_hat <- 16
 
+# bts_mean: mean for the Normal draws used to simulate data
+bts_mean <- 5
+
+# hat: a training (base forecasts) feautures vector
+hat <- rnorm(sum(te_fh)*N_hat, rep(te_set*bts_mean,  N_hat*te_fh))
+
+# obs: (observed) values for the highest frequency series (k = 1)
+obs <- rnorm(m*N_hat, bts_mean)
+
+# h: base forecast horizon at the lowest-frequency series (k = m)
+h <- 2
+
+# base: base forecasts matrix
+base <- rnorm(sum(te_fh)*h, rep(te_set*bts_mean,  h*te_fh))
+
+##########################################################################
+# Different ML approaches
+##########################################################################
+# XGBoost Reconciliation (xgboost pkg)
+reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+              approach = "xgboost", seed = 123, features = "rtw")
+
+# XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
+reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+              approach = "xgboost", seed = 123, features = "rtw",
+              params =  list(
+                eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
+                max_depth = 6, gamma = 0, subsample = 1,
+                objective = "reg:tweedie", # Tweedie regression objective
+                tweedie_variance_power = 1.5 # Tweedie power parameter
+              ))
+
+# LightGBM Reconciliation (lightgbm pkg)
+reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+              approach = "lightgbm", seed = 123, features = "rtw")
+
+# Random Forest Reconciliation (randomForest pkg)
+reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+              approach = "randomForest", seed = 123, features = "rtw")
+
+# Using the mlr3 pkg:
+# With 'params = list(.key = mlr_learners)' we can specify different
+# mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
+# "regr.xgboost" for XGBoost, and others.
+reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+              approach = "mlr3", seed = 123, features = "rtw",
+              # choose mlr3 learner (here Random Forest via ranger)
+              params = list(.key = "regr.ranger"))
+
+\dontrun{
+# With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
+# We can reduce excessive logging by calling:
+if(requireNamespace("lgr", quietly = TRUE)){
+  lgr::get_logger("mlr3")$set_threshold(NULL)
+  lgr::get_logger("bbotk")$set_threshold(NULL)
+}
+reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+              approach = "mlr3", seed = 123, features = "rtw",
+              params = list(
+                .key = "regr.ranger",
+                # number of features tried at each split
+                mtry = paradox::to_tune(paradox::p_int(1, 2))
+              ),
+              tuning = list(
+                # stop after 10 evaluations
+                terminator = mlr3tuning::trm("evals", n_evals = 10)
+              ))
+}
+##########################################################################
+# Usage with pre-trained models
+##########################################################################
+# Pre-trained machine learning models (e.g., omit the base param)
+mdl <- terml(hat = hat, obs = obs, agg_order = m,
+             approach = "lightgbm", seed = 123, features = "rtw")
+
+# Pre-trained machine learning models with base param
+reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+              approach = "lightgbm", seed = 123, features = "rtw")
+mdl2 <- extract_reconciled_ml(reco)
+
+# New base forecasts matrix
+base_new <- rnorm(sum(te_fh)*h, rep(te_set*bts_mean,  h*te_fh))
+reco_new <- terml(base = base_new, fit = mdl2, agg_order = m)
+
+}
+\references{
+Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
+solar forecasts, \emph{Solar Energy}, 251, 13–29.
+\doi{10.1016/j.solener.2023.01.003}
+
+Rombouts, J., Ternes, M., and Wilms, I. (2025). Cross-temporal forecast
+reconciliation at digital platforms with machine learning.
+\emph{International Journal of Forecasting}, 41(1), 321-344.
+\doi{10.1016/j.ijforecast.2024.05.008}
 }

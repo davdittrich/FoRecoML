@@ -1,0 +1,47 @@
+url: https://danigiro.github.io/FoRecoML
+
+development:
+  mode: release
+  version_label: default
+  version_tooltip: "Version"
+
+template:
+  bootstrap: 5
+  math-rendering: mathjax
+
+navbar:
+  structure:
+    left: [home, reference, news]
+    right:  [github, rpro]
+  components:
+    github:
+      icon: fab fa-github fa-lg
+      href: https://github.com/danigiro/FoRecoML
+      aria-label: View on GitHub
+    reference:
+      text: "Reference"
+      icon: fa-book
+      href: reference/index.html
+    news:
+      text: "News"
+      icon: far fa-newspaper
+      href: news/index.html
+    home:
+      text: "Home"
+      icon: fa-home
+      href: index.html
+    rpro:
+      icon: fab fa-r-project fa-lg
+      href: https://CRAN.R-project.org/package=FoRecoML
+      aria-label: View on CRAN
+
+reference:
+  - title: Forecast reconciliation with Machine Learning
+    contents:
+      - csrml
+      - terml
+      - ctrml
+  - title: Others
+    contents:
+      - FoRecoML-package
+      - extract_reconciled_ml

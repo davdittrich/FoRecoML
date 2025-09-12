@@ -1,36 +1,146 @@
 #' Temporal Reconciliation with Machine Learning
 #'
-#' @param hat todo
-#' @param obs todo
-#' @param base todo
-#' @param agg_order todo
-#' @param tew todo
-#' @param params todo
-#' @param features todo
-#' @param fit todo
-#' @param approach todo
-#' @param sntz todo
-#' @param seed todo
-#' @param tuning todo (see [mlr3tuning::auto_tuner], except 'learner')
+#' TODO
 #'
-#' @return Reconciled forecasts or Reconciled models
+#' @usage
+#' terml(base, hat, obs, agg_order, features = "all", approach = "randomForest",
+#'       params = NULL, tuning = NULL, fit = NULL, tew = "sum", sntz = FALSE,
+#'       seed = NULL)
+#'
+#' @param base A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
+#'   base forecasts to be reconciled, ordered from lowest to highest frequency.
+#'   Here, \eqn{N} is the training length for the lowest frequency time series,
+#'   \eqn{m} is the maximum aggregation order, and \eqn{k^\ast} is the sum of a
+#'   chosen subset of the \eqn{p - 1} factors of \eqn{m} (excluding \eqn{m}
+#'   itself).
+#' @param hat A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
+#'   base forecasts ordered from lowest to highest frequency; \eqn{N} is the
+#'   training length for the lowest frequency time series. These
+#'   forecasts are used to train the ML approach.
+#' @param obs A (\eqn{Nm \times 1}) numeric vector containing (observed) values
+#'   for the highest frequency series (\eqn{k = 1}). These values are used to
+#'   train the ML approach.
+#' @param features Character string specifying which features are used for model
+#'   training. Options include "\code{hfts}", "\code{str}", "\code{str-hfts}",
+#'   "\code{all}" (\emph{default}), and "\code{rtw}".
+#' @inheritParams ctrml
+#'
+#' @returns If \code{base} is provided, returns a temporal reconciled forecast
+#'   vector with the same dimensions, along with attributes containing the
+#'   fitted model and reconciliation settings (see, [FoReco::recoinfo] and
+#'   [extract_reconciled_ml]). If only models are trained (omitting
+#'   \code{base}), returns a fitted object that can be reused for reconciliation
+#'   on new base forecasts (see, [extract_reconciled_ml]).
+#'
+#' @references
+#' Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
+#' solar forecasts, \emph{Solar Energy}, 251, 13–29.
+#' \doi{10.1016/j.solener.2023.01.003}
+#'
+#' Rombouts, J., Ternes, M., and Wilms, I. (2025). Cross-temporal forecast
+#' reconciliation at digital platforms with machine learning.
+#' \emph{International Journal of Forecasting}, 41(1), 321-344.
+#' \doi{10.1016/j.ijforecast.2024.05.008}
 #'
 #' @examples
-#' set.seed(123)
-#' # (7 x 1) base forecasts vector (simulated), m = 4
+#' # m: quarterly temporal aggregation order
+#' m <- 4
+#' te_set <- tetools(m)$set
 #'
-#' hat <- rnorm(7*10, rep(c(20, 10, 5), 10*c(1, 2, 4)))
-#' obs <- rnorm(4*10, 5)
-#' base <- rnorm(7*2, rep(c(20, 10, 5), 2*c(1, 2, 4)))
+#' # te_fh: minimum forecast horizon per temporal aggregate
+#' te_fh <- m/te_set
 #'
-#' m <- 4 # from quarterly to annual temporal aggregation
-#' reco <- terml(hat = hat, obs = obs, base = base, agg_order = m,
-#'               features = "all")
+#' # N_hat: dimension for the lowest frequency (k = m) training set
+#' N_hat <- 16
+#'
+#' # bts_mean: mean for the Normal draws used to simulate data
+#' bts_mean <- 5
+#'
+#' # hat: a training (base forecasts) feautures vector
+#' hat <- rnorm(sum(te_fh)*N_hat, rep(te_set*bts_mean,  N_hat*te_fh))
+#'
+#' # obs: (observed) values for the highest frequency series (k = 1)
+#' obs <- rnorm(m*N_hat, bts_mean)
+#'
+#' # h: base forecast horizon at the lowest-frequency series (k = m)
+#' h <- 2
+#'
+#' # base: base forecasts matrix
+#' base <- rnorm(sum(te_fh)*h, rep(te_set*bts_mean,  h*te_fh))
+#'
+#' ##########################################################################
+#' # Different ML approaches
+#' ##########################################################################
+#' # XGBoost Reconciliation (xgboost pkg)
+#' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+#'               approach = "xgboost", seed = 123, features = "rtw")
+#'
+#' # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
+#' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+#'               approach = "xgboost", seed = 123, features = "rtw",
+#'               params =  list(
+#'                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
+#'                 max_depth = 6, gamma = 0, subsample = 1,
+#'                 objective = "reg:tweedie", # Tweedie regression objective
+#'                 tweedie_variance_power = 1.5 # Tweedie power parameter
+#'               ))
+#'
+#' # LightGBM Reconciliation (lightgbm pkg)
+#' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+#'               approach = "lightgbm", seed = 123, features = "rtw")
+#'
+#' # Random Forest Reconciliation (randomForest pkg)
+#' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+#'               approach = "randomForest", seed = 123, features = "rtw")
+#'
+#' # Using the mlr3 pkg:
+#' # With 'params = list(.key = mlr_learners)' we can specify different
+#' # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
+#' # "regr.xgboost" for XGBoost, and others.
+#' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+#'               approach = "mlr3", seed = 123, features = "rtw",
+#'               # choose mlr3 learner (here Random Forest via ranger)
+#'               params = list(.key = "regr.ranger"))
+#'
+#' \dontrun{
+#' # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
+#' # We can reduce excessive logging by calling:
+#' if(requireNamespace("lgr", quietly = TRUE)){
+#'   lgr::get_logger("mlr3")$set_threshold(NULL)
+#'   lgr::get_logger("bbotk")$set_threshold(NULL)
+#' }
+#' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+#'               approach = "mlr3", seed = 123, features = "rtw",
+#'               params = list(
+#'                 .key = "regr.ranger",
+#'                 # number of features tried at each split
+#'                 mtry = paradox::to_tune(paradox::p_int(1, 2))
+#'               ),
+#'               tuning = list(
+#'                 # stop after 10 evaluations
+#'                 terminator = mlr3tuning::trm("evals", n_evals = 10)
+#'               ))
+#' }
+#' ##########################################################################
+#' # Usage with pre-trained models
+#' ##########################################################################
+#' # Pre-trained machine learning models (e.g., omit the base param)
+#' mdl <- terml(hat = hat, obs = obs, agg_order = m,
+#'              approach = "lightgbm", seed = 123, features = "rtw")
+#'
+#' # Pre-trained machine learning models with base param
+#' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
+#'               approach = "lightgbm", seed = 123, features = "rtw")
+#' mdl2 <- extract_reconciled_ml(reco)
+#'
+#' # New base forecasts matrix
+#' base_new <- rnorm(sum(te_fh)*h, rep(te_set*bts_mean,  h*te_fh))
+#' reco_new <- terml(base = base_new, fit = mdl2, agg_order = m)
 #'
 #' @export
-terml <- function(hat, obs, base, agg_order, features = "all", approach = "randomForest",
-                  params = NULL, tuning = NULL, fit = NULL, tew = "sum", sntz = FALSE,
-                  seed = NULL){
+terml <- function(base, hat, obs, agg_order, features = "all",
+                  approach = "randomForest", params = NULL, tuning = NULL,
+                  fit = NULL, tew = "sum", sntz = FALSE, seed = NULL){
 
   features <- match.arg(features, c("all", "hfts", "str", "str-hfts", "rtw"))
 
@@ -46,6 +156,8 @@ terml <- function(hat, obs, base, agg_order, features = "all", approach = "rando
   id_hfts <- c(rep(0, tmp$dim[["ks"]]), rep(1, m))
   strc_mat <- tmp$strc_mat
   agg_mat <- tmp$agg_mat
+
+  block_sampling <- NULL # block_sampling for the block tuning rtw option on mlr3
 
   if(is.null(fit)){
     if(missing(obs)){
@@ -77,7 +189,7 @@ terml <- function(hat, obs, base, agg_order, features = "all", approach = "rando
       base <- NULL
     }else if(length(base) %% kt != 0){
       cli_abort("Incorrect {.arg base} length.", call = NULL)
-    } else {
+    }else{
       h <- length(base) / kt
       if(grepl("rtw", features)){
         base <- input2rtw(base, kset)
@@ -102,7 +214,7 @@ terml <- function(hat, obs, base, agg_order, features = "all", approach = "rando
            },
            "rtw" = {
              sel_mat <- 1
-             block_sampling <- h
+             block_sampling <- tmp$dim[["m"]]
            }
     )
     attr(sel_mat, "sel_method") <- features
@@ -111,14 +223,19 @@ terml <- function(hat, obs, base, agg_order, features = "all", approach = "rando
     obs <- NULL
     sel_mat <- NULL
     approach <- fit$approach
+    features <- attr(fit$sel_mat, "sel_method")
 
     if(missing(base)){
       cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
     }else if(length(base) %% kt != 0){
       cli_abort("Incorrect {.arg base} length.", call = NULL)
-    } else {
+    }else{
       h <- length(base) / kt
-      base <- vec2hmat(vec = base, h = h, kset = kset)
+      if(grepl("rtw", features)){
+        base <- input2rtw(base, kset)
+      }else{
+        base <- vec2hmat(vec = base, h = h, kset = kset)
+      }
     }
   }
 

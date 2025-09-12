@@ -39,11 +39,11 @@ rml <- function(approach, base = NULL, obs = NULL, hat = NULL, sel_mat = NULL,
 
   out <- lapply(1:p, function(i){
     if(is(sel_mat, "sparseVector") | is.vector(sel_mat)){
-      id <- sel_mat == 1
+      id <- which(sel_mat == 1)
     }else if(length(sel_mat) == 1){
-      id <- rep(TRUE, NCOL(hat))
+      id <- seq_len(max(NCOL(hat), NCOL(base)))
     }else{
-      id <- sel_mat[, i] == 1
+      id <- which(sel_mat[, i] == 1)
     }
 
     if(is.null(fit)){
@@ -83,6 +83,221 @@ rml <- function(approach, base = NULL, obs = NULL, hat = NULL, sel_mat = NULL,
     return(fit)
   }
 }
+
+.rml <- function(approach, ...){
+  UseMethod("rml", approach)
+}
+
+rml.mlr3 <- function(y = NULL, X = NULL, Xtest = NULL, fit = NULL,
+                      params = NULL, tuning = NULL, block_sampling = NULL,
+                      ...){
+  requireNamespace("mlr3learners", quietly = TRUE)
+  if(is.null(fit)){
+    if(is.null(y) && is.null(X)){
+      cli_abort(c("Mandatory arguments:",
+                  "1. {.arg y} and {.arg X};",
+                  "2. {.arg fit} and {.arg Xtest}."),
+                call = NULL)
+    }
+
+    params$.key <- ifelse(is.null(params$.key), "regr.ranger", params$.key)
+    tsk_i <- cbind(y = y, X)
+    tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
+    fit <- do.call(lrn, params)
+    if(!is.null(tuning)){
+      if(is.null(tuning$tuner)){
+        tuning$tuner <- mlr3tuning::tnr("random_search", batch_size = 2)
+      }
+      if(is.null(tuning$resampling)){
+        tuning$resampling <- mlr3::rsmp("cv", folds = 5)
+      }
+      if(is.null(tuning$store_benchmark_result)){
+        tuning$store_benchmark_result <- TRUE
+      }
+      if(is.null(tuning$store_models)){
+        tuning$store_models <- FALSE
+      }
+      if(is.null(tuning$check_values)){
+        tuning$check_values <- FALSE
+      }
+
+      if(!is.null(block_sampling)){
+        tsk_i <- cbind(y = y, X, id = rep(1:NROW(X), each = block_sampling))
+        tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
+        # tsk_i$encapsulate("evaluate", fallback = lrn("regr.featureless"))
+        tsk_i$col_roles$group <- "id"
+        tsk_i$col_roles$feature <- setdiff(tsk_i$col_roles$feature, "id")
+        tuning$resampling$instantiate(tsk_i)
+      }
+
+      fit <- mlr3tuning::auto_tuner(
+        tuner = tuning$tuner,
+        #task = tsk_i,
+        learner = fit,
+        resampling = tuning$resampling,
+        measure = tuning$measure,
+        term_evals = tuning$term_evals,
+        term_time = tuning$term_time,
+        terminator = tuning$terminator,
+        search_space = tuning$search_space,
+        store_benchmark_result = tuning$store_benchmark_result,
+        store_models = tuning$store_models,
+        check_values = tuning$check_values,
+        callbacks = tuning$callbacks,
+        rush = tuning$rush
+      )
+    }
+
+    fit$train(tsk_i)
+  }
+
+  bts <- NULL
+  if(!is.null(Xtest)){
+    bts <- fit$predict_newdata(Xtest)$response
+  }
+
+  if(is.null(bts) && is.null(fit)){
+    cli_abort(c("Mandatory arguments:",
+                "1. {.arg y} and {.arg X};",
+                "2. {.arg fit} and {.arg Xtest}."),
+              call = NULL)
+  }
+  return(
+    list(bts = bts, fit = fit)
+  )
+}
+
+rml.randomForest <- function(y = NULL, X = NULL, Xtest = NULL, fit = NULL,
+                       params = NULL, ...){
+  if(is.null(fit)){
+    if(is.null(y) && is.null(X)){
+      cli_abort(c("Mandatory arguments:",
+                  "1. {.arg y} and {.arg X};",
+                  "2. {.arg fit} and {.arg Xtest}."),
+                call = NULL)
+    }
+
+    mtry <- ifelse(is.null(params$mtry), max(floor(ncol(X)/3), 1), params$mtry)
+    nodesize <- ifelse(is.null(params$nodesize), 5, params$nodesize)
+    ntree <- ifelse(is.null(params$ntree), 500, params$ntree)
+
+    fit <- randomForest(y = y,
+                        x = X,
+                        mtry = mtry,
+                        nodesize = nodesize,
+                        ntree = ntree,
+                        importance = FALSE)
+  }
+
+  bts <- NULL
+  if(!is.null(Xtest)){
+    bts <- as.vector(predict(fit, Xtest))
+  }
+
+  if(is.null(bts) && is.null(fit)){
+    cli_abort(c("Mandatory arguments:",
+                "1. {.arg y} and {.arg X};",
+                "2. {.arg fit} and {.arg Xtest}."),
+              call = NULL)
+  }
+  return(
+    list(bts = bts, fit = fit)
+  )
+}
+
+rml.xgboost <- function(y = NULL, X = NULL, Xtest = NULL, fit = NULL,
+                            params = NULL, ...){
+  if(is.null(fit)){
+    if(is.null(y) && is.null(X)){
+      cli_abort(c("Mandatory arguments:",
+                  "1. {.arg y} and {.arg X};",
+                  "2. {.arg fit} and {.arg Xtest}."),
+                call = NULL)
+    }
+
+    if(is.null(params)){
+      params <- list(
+        eta = 0.3,
+        colsample_bytree = 1,
+        min_child_weight = 1,
+        max_depth = 6,
+        gamma = 0,
+        subsample = 1,
+        objective = "reg:squarederror"
+      )
+      nrounds = 100
+    }else{
+      nrounds <- ifelse(is.null(params$nrounds), 100, params$nrounds)
+    }
+
+    train <- xgb.DMatrix(data = as.matrix(X), label = y)
+    fit <- xgb.train(data = train, nrounds = nrounds,
+                     params = params, verbose = 0)
+  }
+
+  bts <- NULL
+  if(!is.null(Xtest)){
+    test <- xgb.DMatrix(data = as.matrix(Xtest))
+    bts <- as.vector(predict(fit, test))
+  }
+
+  if(is.null(bts) && is.null(fit)){
+    cli_abort(c("Mandatory arguments:",
+                "1. {.arg y} and {.arg X};",
+                "2. {.arg fit} and {.arg Xtest}."),
+              call = NULL)
+  }
+
+  return(
+    list(bts = bts, fit = fit)
+  )
+}
+
+rml.lightgbm <- function(y = NULL, X = NULL, Xtest = NULL, fit = NULL,
+                             params = NULL, ...){
+  if(is.null(fit)){
+    if(is.null(y) && is.null(X)){
+      cli_abort(c("Mandatory arguments:",
+                  "1. {.arg y} and {.arg X};",
+                  "2. {.arg fit} and {.arg Xtest}."),
+                call = NULL)
+    }
+
+    if(is.null(params)){
+      params <- list(
+        eta = 0.1,
+        num_leaves = 31,
+        subsample = 1,
+        colsample_bytree = 1,
+        min_child_weight = 1e-3,
+        max_depth = -1,
+        lambda_l1 = 0,
+        objective = "regression"
+      )
+      nrounds = 100
+    }else{
+      nrounds <- ifelse(is.null(params$nrounds), 100, params$nrounds)
+    }
+    train <- lgb.Dataset(data = as.matrix(X), label = y)
+    fit <- lgb.train(data = train, params = params, nrounds = nrounds, verbose = -1)
+  }
+
+  bts <- NULL
+  if(!is.null(Xtest)){
+    bts <- as.vector(predict(fit, as.matrix(Xtest)))
+  }
+
+  if(is.null(bts) && is.null(fit)){
+    cli_abort(c("Mandatory arguments:",
+                "1. {.arg y} and {.arg X};",
+                "2. {.arg fit} and {.arg Xtest}."),
+              call = NULL)
+  }
+  return(
+    list(bts = bts, fit = fit)
+  )
+}
+
 
 # rml_fit_rf <- function(y = NULL, X = NULL, Xtest = NULL, fit = NULL,
 #                        params = NULL, ...){
@@ -293,218 +508,3 @@ rml <- function(approach, base = NULL, obs = NULL, hat = NULL, sel_mat = NULL,
 #     list(bts = bts, fit = fit)
 #   )
 # }
-
-.rml <- function(approach, ...){
-  UseMethod(".rml", approach)
-}
-
-.rml.mlr3 <- function(y = NULL, X = NULL, Xtest = NULL, fit = NULL,
-                      params = NULL, tuning = NULL, block_sampling = NULL,
-                      ...){
-  require("mlr3learners")
-  require("mlr3")
-  if(is.null(fit)){
-    if(is.null(y) && is.null(X)){
-      cli_abort(c("Mandatory arguments:",
-                  "1. {.arg y} and {.arg X};",
-                  "2. {.arg fit} and {.arg Xtest}."),
-                call = NULL)
-    }
-
-    params$.key <- ifelse(is.null(params$.key), "regr.ranger", params$.key)
-    tsk_i <- cbind(y = y, X)
-    tsk_i <- as_task_regr(tsk_i, target = "y")
-    fit <- do.call(lrn, params)
-    if(!is.null(tuning)){
-      if(is.null(tuning$tuner)){
-        tuning$tuner <- tnr("random_search", batch_size = 2)
-      }
-      if(is.null(tuning$resampling)){
-        tuning$resampling <- rsmp("cv", folds = 5)
-      }
-      if(is.null(tuning$store_benchmark_result)){
-        tuning$store_benchmark_result <- TRUE
-      }
-      if(is.null(tuning$store_models)){
-        tuning$store_models <- FALSE
-      }
-      if(is.null(tuning$check_values)){
-        tuning$check_values <- FALSE
-      }
-
-      if(!is.null(block_sampling)){
-        tsk_i <- cbind(y = y, X, id = rep(1:NROW(X), each = block_sampling))
-        tsk_i <- as_task_regr(tsk_i, target = "y")
-        tsk_i$col_roles$group <- "id"
-        tsk_i$col_roles$feature <- setdiff(tsk_i$col_roles$feature, "id")
-        tuning$resampling$instantiate(tsk_i)
-      }
-
-      fit <- auto_tuner(
-        tuner = tuning$tuner,
-        #task = tsk_i,
-        learner = fit,
-        resampling = tuning$resampling,
-        measure = tuning$measure,
-        term_evals = tuning$term_evals,
-        term_time = tuning$term_time,
-        terminator = tuning$terminator,
-        search_space = tuning$search_space,
-        store_benchmark_result = tuning$store_benchmark_result,
-        store_models = tuning$store_models,
-        check_values = tuning$check_values,
-        callbacks = tuning$callbacks,
-        rush = tuning$rush
-      )
-      #fit$param_set$values = instance$result_learner_param_vals
-    }
-
-    fit$train(tsk_i)
-  }
-
-  bts <- NULL
-  if(!is.null(Xtest)){
-    bts <- fit$predict_newdata(Xtest)$response
-  }
-
-  if(is.null(bts) && is.null(fit)){
-    cli_abort(c("Mandatory arguments:",
-                "1. {.arg y} and {.arg X};",
-                "2. {.arg fit} and {.arg Xtest}."),
-              call = NULL)
-  }
-  return(
-    list(bts = bts, fit = fit)
-  )
-}
-
-.rml.randomForest <- function(y = NULL, X = NULL, Xtest = NULL, fit = NULL,
-                       params = NULL, ...){
-  if(is.null(fit)){
-    if(is.null(y) && is.null(X)){
-      cli_abort(c("Mandatory arguments:",
-                  "1. {.arg y} and {.arg X};",
-                  "2. {.arg fit} and {.arg Xtest}."),
-                call = NULL)
-    }
-
-    mtry <- ifelse(is.null(params$mtry), max(floor(ncol(X)/3), 1), params$mtry)
-    nodesize <- ifelse(is.null(params$nodesize), 5, params$nodesize)
-    ntree <- ifelse(is.null(params$ntree), 500, params$ntree)
-
-    fit <- randomForest(y = y,
-                        x = X,
-                        mtry = mtry,
-                        nodesize = nodesize,
-                        ntree = ntree,
-                        importance = FALSE)
-  }
-
-  bts <- NULL
-  if(!is.null(Xtest)){
-    bts <- as.vector(predict(fit, Xtest))
-  }
-
-  if(is.null(bts) && is.null(fit)){
-    cli_abort(c("Mandatory arguments:",
-                "1. {.arg y} and {.arg X};",
-                "2. {.arg fit} and {.arg Xtest}."),
-              call = NULL)
-  }
-  return(
-    list(bts = bts, fit = fit)
-  )
-}
-
-.rml.xgboost <- function(y = NULL, X = NULL, Xtest = NULL, fit = NULL,
-                            params = NULL, ...){
-  if(is.null(fit)){
-    if(is.null(y) && is.null(X)){
-      cli_abort(c("Mandatory arguments:",
-                  "1. {.arg y} and {.arg X};",
-                  "2. {.arg fit} and {.arg Xtest}."),
-                call = NULL)
-    }
-
-    if(is.null(params)){
-      params <- list(
-        eta = 0.3,
-        colsample_bytree = 1,
-        min_child_weight = 1,
-        max_depth = 6,
-        gamma = 0,
-        subsample = 1,
-        objective = "reg:squarederror"
-      )
-      nrounds = 100
-    }else{
-      nrounds <- ifelse(is.null(params$nrounds), 100, params$nrounds)
-    }
-
-    train <- xgb.DMatrix(data = as.matrix(X), label = y)
-    fit <- xgb.train(data = train, nrounds = nrounds,
-                     params = params, verbose = 0)
-  }
-
-  bts <- NULL
-  if(!is.null(Xtest)){
-    test <- xgb.DMatrix(data = as.matrix(Xtest))
-    bts <- as.vector(predict(fit, test))
-  }
-
-  if(is.null(bts) && is.null(fit)){
-    cli_abort(c("Mandatory arguments:",
-                "1. {.arg y} and {.arg X};",
-                "2. {.arg fit} and {.arg Xtest}."),
-              call = NULL)
-  }
-
-  return(
-    list(bts = bts, fit = fit)
-  )
-}
-
-.rml.lightgbm <- function(y = NULL, X = NULL, Xtest = NULL, fit = NULL,
-                             params = NULL, ...){
-  if(is.null(fit)){
-    if(is.null(y) && is.null(X)){
-      cli_abort(c("Mandatory arguments:",
-                  "1. {.arg y} and {.arg X};",
-                  "2. {.arg fit} and {.arg Xtest}."),
-                call = NULL)
-    }
-
-    if(is.null(params)){
-      params <- list(
-        eta = 0.1,
-        num_leaves = 31,
-        subsample = 1,
-        colsample_bytree = 1,
-        min_child_weight = 1e-3,
-        max_depth = -1,
-        lambda_l1 = 0,
-        objective = "regression"
-      )
-      nrounds = 100
-    }else{
-      nrounds <- ifelse(is.null(params$nrounds), 100, params$nrounds)
-    }
-    train <- lgb.Dataset(data = as.matrix(X), label = y)
-    fit <- lgb.train(data = train, params = params, nrounds = nrounds, verbose = -1)
-  }
-
-  bts <- NULL
-  if(!is.null(Xtest)){
-    bts <- as.vector(predict(fit, as.matrix(Xtest)))
-  }
-
-  if(is.null(bts) && is.null(fit)){
-    cli_abort(c("Mandatory arguments:",
-                "1. {.arg y} and {.arg X};",
-                "2. {.arg fit} and {.arg Xtest}."),
-              call = NULL)
-  }
-  return(
-    list(bts = bts, fit = fit)
-  )
-}

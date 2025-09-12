@@ -1,7 +1,7 @@
 Package: FoRecoML
 Type: Package
 Title: Forecast Reconciliation with Machine Learning
-Version: 0.0.1.9000
+Version: 0.0.0.9000
 Authors@R: c(
     person(
       given = "Daniele", 
@@ -35,10 +35,15 @@ Authors@R: c(
 Description: More about what it does (maybe more than one line).
     Continuation lines should be indented.
 Depends: R (>= 3.4), Matrix, FoReco
-Imports: randomForest, stats, cli, lightgbm, mlr3, xgboost, methods, mlr3tuning
+Imports: stats, cli, methods, randomForest, lightgbm, xgboost, 
+    mlr3, mlr3tuning, mlr3learners, paradox
 License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.3.2
-URL: https://github.com/danigiro/FoRecoML
+RoxygenNote: 7.3.3
+Roxygen: list(markdown = TRUE)
+URL: https://github.com/danigiro/FoRecoML, https://danigiro.github.io/FoRecoML
 BugReports: https://github.com/danigiro/FoRecoML/issues
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
