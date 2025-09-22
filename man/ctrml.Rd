@@ -6,7 +6,7 @@
 \usage{
 ctrml(base, hat, obs, agg_mat, agg_order, features = "all",
       approach = "randomForest", params = NULL, tuning = NULL,
-      fit = NULL, tew = "sum", sntz = FALSE, seed = NULL)
+      fit = NULL, tew = "sum", sntz = FALSE, round = TRUE, seed = NULL)
 }
 \arguments{
 \item{base}{A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
@@ -30,13 +30,13 @@ values for the highest frequency series (\eqn{k = 1}); \eqn{n_b} is the
 total number of high-frequency bottom variables. These values are used to
 train the ML approach.}
 
-\item{agg_mat}{A (\eqn{n_a \times n_b}) numeric matrix representing the cross-sectional
-aggregation matrix. It maps the \eqn{n_b} bottom-level (free)
-variables into the \eqn{n_a} upper (constrained) variables.}
+\item{agg_mat}{A (\eqn{n_a \times n_b}) numeric matrix representing the
+cross-sectional aggregation matrix. It maps the \eqn{n_b} bottom-level
+(free) variables into the \eqn{n_a} upper (constrained) variables.}
 
-\item{agg_order}{Highest available sampling frequency per seasonal cycle (max. order
-of temporal aggregation, \eqn{m}), or a vector representing a subset of \eqn{p} factors
-of \eqn{m}.}
+\item{agg_order}{Highest available sampling frequency per seasonal cycle
+(max. order of temporal aggregation, \eqn{m}), or a vector representing a
+subset of \eqn{p} factors of \eqn{m}.}
 
 \item{features}{Character string specifying which features are used for model
 training. Options include "\code{hfbts}", "\code{hfts}", "\code{bts}",
@@ -73,14 +73,18 @@ through \code{params}.}
 \link{extract_reconciled_ml}). If supplied, training data (\code{hat},
 \code{obs}) are not required.}
 
-\item{tew}{A string specifying the type of temporal aggregation. Options include:
-"\code{sum}" (simple summation, \emph{default}), "\code{avg}" (average),
-"\code{first}" (first value of the period), and "\code{last}"
+\item{tew}{A string specifying the type of temporal aggregation. Options
+include: "\code{sum}" (simple summation, \emph{default}), "\code{avg}"
+(average), "\code{first}" (first value of the period), and "\code{last}"
 (last value of the period).}
 
 \item{sntz}{Logical. If \code{TRUE}, enforces non-negativity on reconciled
-forecasts (\emph{default} \code{FALSE}) using the heuristic
-"set-negative-to-zero" (Di Fonzo and Girolimetto, 2023).}
+forecasts using the heuristic "set-negative-to-zero" (Di Fonzo and
+Girolimetto, 2023). \emph{Default} is \code{FALSE}.}
+
+\item{round}{Logical. If \code{TRUE}, reconciled forecasts are rounded to
+integer values and coherence is ensured via a bottom-up adjustment.
+\emph{Default} is \code{FALSE}.}
 
 \item{seed}{Optional integer seed for reproducibility.}
 }

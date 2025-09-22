@@ -4,7 +4,8 @@
 #'
 #' @usage
 #' csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
-#'       params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, seed = NULL)
+#'       params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = TRUE,
+#'       seed = NULL)
 #'
 #' @param base A (\eqn{h \times n}) numeric matrix or multivariate time series
 #'   (\code{mts} class) containing the base forecasts to be reconciled; \eqn{h}
@@ -143,7 +144,7 @@
 #' @export
 csrml <- function(base, hat, obs, agg_mat, features = "all",
                   approach = "randomForest", params = NULL, tuning = NULL,
-                  fit = NULL, sntz = FALSE, seed = NULL){
+                  fit = NULL, sntz = FALSE, round = FALSE, seed = NULL){
   features <- match.arg(features, c("all", "bts", "str", "str-bts"))
 
   if(missing(agg_mat)){
@@ -312,6 +313,10 @@ csrml <- function(base, hat, obs, agg_mat, features = "all",
     fit$approach <- approach
     attr(reco_mat, "fit") <- NULL
     reco_mat <- csbu(reco_mat, agg_mat = agg_mat, sntz = sntz)
+
+    if(round){
+      reco_mat <- round(reco_mat)
+    }
 
     attr(reco_mat, "FoReco") <- list2env(list(fit = fit,
                                               framework = "Cross-sectional",

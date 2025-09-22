@@ -5,7 +5,8 @@
 \title{Cross-sectional Reconciliation with Machine Learning}
 \usage{
 csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
-      params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, seed = NULL)
+      params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = TRUE,
+      seed = NULL)
 }
 \arguments{
 \item{base}{A (\eqn{h \times n}) numeric matrix or multivariate time series
@@ -20,9 +21,9 @@ to train the ML approach; \eqn{N} is the training length.}
 to train the ML approach; \eqn{n_b} is the total number of bottom
 variables.}
 
-\item{agg_mat}{A (\eqn{n_a \times n_b}) numeric matrix representing the cross-sectional
-aggregation matrix. It maps the \eqn{n_b} bottom-level (free)
-variables into the \eqn{n_a} upper (constrained) variables.}
+\item{agg_mat}{A (\eqn{n_a \times n_b}) numeric matrix representing the
+cross-sectional aggregation matrix. It maps the \eqn{n_b} bottom-level
+(free) variables into the \eqn{n_a} upper (constrained) variables.}
 
 \item{features}{Character string specifying which features are used for model
 training. Options include "\code{bts}", "\code{str}", "\code{str-bts}", and
@@ -59,8 +60,12 @@ through \code{params}.}
 \code{obs}) are not required.}
 
 \item{sntz}{Logical. If \code{TRUE}, enforces non-negativity on reconciled
-forecasts (\emph{default} \code{FALSE}) using the heuristic
-"set-negative-to-zero" (Di Fonzo and Girolimetto, 2023).}
+forecasts using the heuristic "set-negative-to-zero" (Di Fonzo and
+Girolimetto, 2023). \emph{Default} is \code{FALSE}.}
+
+\item{round}{Logical. If \code{TRUE}, reconciled forecasts are rounded to
+integer values and coherence is ensured via a bottom-up adjustment.
+\emph{Default} is \code{FALSE}.}
 
 \item{seed}{Optional integer seed for reproducibility.}
 }

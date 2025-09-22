@@ -5,11 +5,11 @@
 #' @usage
 #' terml(base, hat, obs, agg_order, features = "all", approach = "randomForest",
 #'       params = NULL, tuning = NULL, fit = NULL, tew = "sum", sntz = FALSE,
-#'       seed = NULL)
+#'       round = TRUE, seed = NULL)
 #'
 #' @param base A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
-#'   base forecasts to be reconciled, ordered from lowest to highest frequency.
-#'   Here, \eqn{N} is the training length for the lowest frequency time series,
+#'   base forecasts to be reconciled, ordered from lowest to highest frequency;
+#'   \eqn{N} is the training length for the lowest frequency time series,
 #'   \eqn{m} is the maximum aggregation order, and \eqn{k^\ast} is the sum of a
 #'   chosen subset of the \eqn{p - 1} factors of \eqn{m} (excluding \eqn{m}
 #'   itself).
@@ -140,7 +140,8 @@
 #' @export
 terml <- function(base, hat, obs, agg_order, features = "all",
                   approach = "randomForest", params = NULL, tuning = NULL,
-                  fit = NULL, tew = "sum", sntz = FALSE, seed = NULL){
+                  fit = NULL, tew = "sum", sntz = FALSE, round = FALSE,
+                  seed = NULL){
 
   features <- match.arg(features, c("all", "hfts", "str", "str-hfts", "rtw"))
 
@@ -254,6 +255,9 @@ terml <- function(base, hat, obs, agg_order, features = "all",
     fit <- attr(reco_mat, "fit")
     fit$approach <- approach
     attr(reco_mat, "fit") <- NULL
+    if(round){
+      reco_mat <- round(reco_mat)
+    }
     reco_mat <- tebu(as.vector(t(reco_mat)), agg_order = agg_order, sntz = sntz, tew = tew)
 
     attr(reco_mat, "FoReco") <- list2env(list(fit = fit,

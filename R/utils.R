@@ -29,7 +29,7 @@
 #' }
 #' @export
 extract_reconciled_ml <- function(reco){
-  if(inherits(reco, "rml_fit")) {
+  if(inherits(reco, "rml_fit")){
     cli_inform("Input {.arg reco} is already an {.cls rml_fit}; returning it unchanged.")
     return(reco)
   }

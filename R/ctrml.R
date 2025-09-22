@@ -5,7 +5,7 @@
 #' @usage
 #' ctrml(base, hat, obs, agg_mat, agg_order, features = "all",
 #'       approach = "randomForest", params = NULL, tuning = NULL,
-#'       fit = NULL, tew = "sum", sntz = FALSE, seed = NULL)
+#'       fit = NULL, tew = "sum", sntz = FALSE, round = TRUE, seed = NULL)
 #'
 #' @param base A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
 #'   forecasts to be reconciled; \eqn{n} is the total number of variables,
@@ -52,8 +52,11 @@
 #'   \code{.key} to select the learner (e.g. \code{.key = "regr.xgboost"},
 #'   \emph{default}).
 #' @param sntz Logical. If \code{TRUE}, enforces non-negativity on reconciled
-#'   forecasts (\emph{default} \code{FALSE}) using the heuristic
-#'   "set-negative-to-zero" (Di Fonzo and Girolimetto, 2023).
+#'   forecasts using the heuristic "set-negative-to-zero" (Di Fonzo and
+#'   Girolimetto, 2023). \emph{Default} is \code{FALSE}.
+#' @param round Logical. If \code{TRUE}, reconciled forecasts are rounded to
+#'   integer values and coherence is ensured via a bottom-up adjustment.
+#'   \emph{Default} is \code{FALSE}.
 #' @param seed Optional integer seed for reproducibility.
 #' @param tuning Optional list specifying tuning options when using the
 #'   [mlr3tuning] framework (e.g., terminators, search spaces). The argument
@@ -208,7 +211,8 @@
 #' @export
 ctrml <- function(base, hat, obs, agg_mat, agg_order, features = "all",
                   approach = "randomForest", params = NULL, tuning = NULL,
-                  fit = NULL, tew = "sum", sntz = FALSE, seed = NULL){
+                  fit = NULL, tew = "sum", sntz = FALSE, round = FALSE,
+                  seed = NULL){
 
   features <- match.arg(features, c("hfbts", "hfts", "bts", "str", "str-hfbts",
                                     "str-bts", "all", "rtw-full", "rtw-comp"))
@@ -354,6 +358,11 @@ ctrml <- function(base, hat, obs, agg_mat, agg_order, features = "all",
     if(!grepl("rtw", features)){
       reco_mat <- matrix(as.vector(reco_mat), ncol = tmp$dim[["nb"]])
     }
+
+    if(round){
+      reco_mat <- round(reco_mat)
+    }
+
     reco_mat <- ctbu(t(reco_mat), agg_order = agg_order, agg_mat = agg_mat,
                      sntz = sntz, tew = tew)
 
