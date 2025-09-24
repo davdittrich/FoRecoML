@@ -1,6 +1,11 @@
 #' Temporal Reconciliation with Machine Learning
 #'
-#' TODO
+#' This function performs machine-learning–based temporal forecast
+#' reconciliation for linearly constrained multiple time series based on the
+#' cross-temporal approach proposed by Rombouts et al. (2024). Reconciled
+#' forecasts are obtained by fitting non-linear models that map base forecasts
+#' across both temporal dimensions to high-frequency series. Fully coherent
+#' forecasts are then derived by temporal bottom-up.
 #'
 #' @usage
 #' terml(base, hat, obs, agg_order, features = "all", approach = "randomForest",
@@ -36,6 +41,11 @@
 #' Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
 #' solar forecasts, \emph{Solar Energy}, 251, 13–29.
 #' \doi{10.1016/j.solener.2023.01.003}
+#'
+#' Girolimetto, D. and Di Fonzo, T. (2023), Point and probabilistic forecast
+#' reconciliation for general linearly constrained multiple time series,
+#' \emph{Statistical Methods & Applications}, 33, 581-607.
+#' \doi{10.1007/s10260-023-00738-6}.
 #'
 #' Rombouts, J., Ternes, M., and Wilms, I. (2025). Cross-temporal forecast
 #' reconciliation at digital platforms with machine learning.
@@ -138,16 +148,29 @@
 #' reco_new <- terml(base = base_new, fit = mdl2, agg_order = m)
 #'
 #' @export
-terml <- function(base, hat, obs, agg_order, features = "all",
-                  approach = "randomForest", params = NULL, tuning = NULL,
-                  fit = NULL, tew = "sum", sntz = FALSE, round = FALSE,
-                  seed = NULL){
-
+terml <- function(
+  base,
+  hat,
+  obs,
+  agg_order,
+  features = "all",
+  approach = "randomForest",
+  params = NULL,
+  tuning = NULL,
+  fit = NULL,
+  tew = "sum",
+  sntz = FALSE,
+  round = FALSE,
+  seed = NULL
+) {
   features <- match.arg(features, c("all", "hfts", "str", "str-hfts", "rtw"))
 
   # Check if 'agg_order' is provided
-  if(missing(agg_order)){
-    cli_abort("Argument {.arg agg_order} is missing, with no default.", call = NULL)
+  if (missing(agg_order)) {
+    cli_abort(
+      "Argument {.arg agg_order} is missing, with no default.",
+      call = NULL
+    )
   }
 
   tmp <- tetools(agg_order = agg_order, tew = tew)
@@ -160,114 +183,127 @@ terml <- function(base, hat, obs, agg_order, features = "all",
 
   block_sampling <- NULL # block_sampling for the block tuning rtw option on mlr3
 
-  if(is.null(fit)){
-    if(missing(obs)){
+  if (is.null(fit)) {
+    if (missing(obs)) {
       cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
-    }else if(length(obs) %% m != 0){
+    } else if (length(obs) %% m != 0) {
       cli_abort("Incorrect {.arg obs} length.", call = NULL)
-    }else{
-      if(grepl("rtw", features)){
+    } else {
+      if (grepl("rtw", features)) {
         obs <- cbind(obs)
-      }else{
+      } else {
         obs <- matrix(obs, ncol = m, byrow = TRUE)
       }
     }
 
-    if(missing(hat)){
+    if (missing(hat)) {
       cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
-    }else if(length(hat) %% kt != 0){
+    } else if (length(hat) %% kt != 0) {
       cli_abort("Incorrect {.arg hat} length.", call = NULL)
-    }else{
-      if(grepl("rtw", features)){
+    } else {
+      if (grepl("rtw", features)) {
         hat <- input2rtw(hat, kset)
-      }else{
+      } else {
         h <- length(hat) / kt
         hat <- vec2hmat(vec = hat, h = h, kset = kset)
       }
     }
 
-    if(missing(base)){
+    if (missing(base)) {
       base <- NULL
-    }else if(length(base) %% kt != 0){
+    } else if (length(base) %% kt != 0) {
       cli_abort("Incorrect {.arg base} length.", call = NULL)
-    }else{
+    } else {
       h <- length(base) / kt
-      if(grepl("rtw", features)){
+      if (grepl("rtw", features)) {
         base <- input2rtw(base, kset)
-      }else{
+      } else {
         base <- vec2hmat(vec = base, h = h, kset = kset)
       }
     }
 
-    switch(features,
-           "hfts" = {
-             sel_mat <- Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
-           },
-           "str" = {
-             sel_mat <- strc_mat
-           },
-           "str-hfts" = {
-             sel_mat <- strc_mat + Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
-             sel_mat[sel_mat != 0] <- 1
-           },
-           "all" = {
-             sel_mat <- Matrix(1, nrow = kt, ncol = m, sparse = TRUE)
-           },
-           "rtw" = {
-             sel_mat <- 1
-             block_sampling <- tmp$dim[["m"]]
-           }
+    switch(
+      features,
+      "hfts" = {
+        sel_mat <- Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
+      },
+      "str" = {
+        sel_mat <- strc_mat
+      },
+      "str-hfts" = {
+        sel_mat <- strc_mat + Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
+        sel_mat[sel_mat != 0] <- 1
+      },
+      "all" = {
+        sel_mat <- Matrix(1, nrow = kt, ncol = m, sparse = TRUE)
+      },
+      "rtw" = {
+        sel_mat <- 1
+        block_sampling <- tmp$dim[["m"]]
+      }
     )
     attr(sel_mat, "sel_method") <- features
-  }else{
+  } else {
     hat <- NULL
     obs <- NULL
     sel_mat <- NULL
     approach <- fit$approach
     features <- attr(fit$sel_mat, "sel_method")
 
-    if(missing(base)){
-      cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
-    }else if(length(base) %% kt != 0){
+    if (missing(base)) {
+      cli_abort(
+        "Argument {.arg base} is missing, with no default.",
+        call = NULL
+      )
+    } else if (length(base) %% kt != 0) {
       cli_abort("Incorrect {.arg base} length.", call = NULL)
-    }else{
+    } else {
       h <- length(base) / kt
-      if(grepl("rtw", features)){
+      if (grepl("rtw", features)) {
         base <- input2rtw(base, kset)
-      }else{
+      } else {
         base <- vec2hmat(vec = base, h = h, kset = kset)
       }
     }
   }
 
-  reco_mat <- rml(base = base,
-                  hat = hat,
-                  obs = obs,
-                  sel_mat = sel_mat,
-                  approach = approach,
-                  params = params,
-                  seed = seed,
-                  fit = fit,
-                  tuning = tuning,
-                  block_sampling = block_sampling)
+  reco_mat <- rml(
+    base = base,
+    hat = hat,
+    obs = obs,
+    sel_mat = sel_mat,
+    approach = approach,
+    params = params,
+    seed = seed,
+    fit = fit,
+    tuning = tuning,
+    block_sampling = block_sampling
+  )
 
-  if(!is.null(base)){
+  if (!is.null(base)) {
     fit <- attr(reco_mat, "fit")
     fit$approach <- approach
     attr(reco_mat, "fit") <- NULL
-    if(round){
+    if (round) {
       reco_mat <- round(reco_mat)
     }
-    reco_mat <- tebu(as.vector(t(reco_mat)), agg_order = agg_order, sntz = sntz, tew = tew)
+    reco_mat <- tebu(
+      as.vector(t(reco_mat)),
+      agg_order = agg_order,
+      sntz = sntz,
+      tew = tew
+    )
 
-    attr(reco_mat, "FoReco") <- list2env(list(fit = fit,
-                                              framework = "Temporal",
-                                              forecast_horizon = h,
-                                              te_set = tmp$set,
-                                              rfun = "terml",
-                                              ml = approach))
+    attr(reco_mat, "FoReco") <- list2env(list(
+      fit = fit,
+      framework = "Temporal",
+      forecast_horizon = h,
+      te_set = tmp$set,
+      rfun = "terml",
+      ml = approach
+    ))
     return(reco_mat)
-  }else{
+  } else {
     reco_mat$approach <- approach
     return(reco_mat)
   }

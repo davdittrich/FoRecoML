@@ -78,7 +78,17 @@ the fitted model and reconciliation settings (see, \link[FoReco:recoinfo]{FoReco
 on new base forecasts (see, \link{extract_reconciled_ml}).
 }
 \description{
-TODO
+This function performs machine-learning–based cross-sectional forecast
+reconciliation for linearly constrained (e.g., hierarchical/grouped)
+multiple time series (Spiliotis et al., 2021). Reconciled forecasts are
+obtained by training non-linear predictive models (e.g., random forests,
+gradient boosting) that learn mappings from base forecasts across all
+series to bottom-level series values. Coherent forecasts for the entire
+hierarchy are then derived by aggregating the reconciled bottom-level
+forecasts through the summing constraints. While the approach is designed
+for hierarchical and grouped structures, in the case of general linearly
+constrained time series it can be applied within the broader reconciliation
+framework described by Girolimetto and Di Fonzo (2024).
 }
 \examples{
 # agg_mat: simple aggregation matrix, A = B + C
@@ -188,6 +198,11 @@ reco_new <- csrml(base = base_new, fit = mdl, agg_mat = agg_mat)
 Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
 solar forecasts, \emph{Solar Energy}, 251, 13–29.
 \doi{10.1016/j.solener.2023.01.003}
+
+Girolimetto, D. and Di Fonzo, T. (2023), Point and probabilistic forecast
+reconciliation for general linearly constrained multiple time series,
+\emph{Statistical Methods & Applications}, 33, 581-607.
+\doi{10.1007/s10260-023-00738-6}.
 
 Spiliotis, E., Abolghasemi, M., Hyndman, R. J., Petropoulos, F., and
 Assimakopoulos, V. (2021). Hierarchical forecast reconciliation with machine

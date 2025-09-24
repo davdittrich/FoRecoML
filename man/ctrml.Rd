@@ -97,7 +97,16 @@ the fitted model and reconciliation settings (see, \link[FoReco:recoinfo]{FoReco
 on new base forecasts (see, \link{extract_reconciled_ml}).
 }
 \description{
-TODO
+This function performs machine-learning–based cross-temporal forecast
+reconciliation for linearly constrained multiple time series (Rombouts et
+al., 2024). Reconciled forecasts are obtained by fitting non-linear models
+that map base forecasts across both temporal and cross-sectional dimensions
+to bottom-level high-frequency series. Fully coherent forecasts across all
+temporal and cross-sectional linear combinations are then derived by
+cross-temporal bottom-up. While the approach is designed for hierarchical
+and grouped structures, in the case of general linearly constrained time
+series it can be applied within the broader reconciliation framework
+described by Girolimetto and Di Fonzo (2024).
 }
 \examples{
 # m: quarterly temporal aggregation order
@@ -231,6 +240,11 @@ reco_new <- ctrml(base = base_new, fit = mdl, agg_order = m,
 Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
 solar forecasts, \emph{Solar Energy}, 251, 13–29.
 \doi{10.1016/j.solener.2023.01.003}
+
+Girolimetto, D. and Di Fonzo, T. (2023), Point and probabilistic forecast
+reconciliation for general linearly constrained multiple time series,
+\emph{Statistical Methods & Applications}, 33, 581-607.
+\doi{10.1007/s10260-023-00738-6}.
 
 Rombouts, J., Ternes, M., and Wilms, I. (2025). Cross-temporal forecast
 reconciliation at digital platforms with machine learning.

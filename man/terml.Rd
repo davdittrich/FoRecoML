@@ -10,8 +10,8 @@ terml(base, hat, obs, agg_order, features = "all", approach = "randomForest",
 }
 \arguments{
 \item{base}{A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
-base forecasts to be reconciled, ordered from lowest to highest frequency.
-Here, \eqn{N} is the training length for the lowest frequency time series,
+base forecasts to be reconciled, ordered from lowest to highest frequency;
+\eqn{N} is the training length for the lowest frequency time series,
 \eqn{m} is the maximum aggregation order, and \eqn{k^\ast} is the sum of a
 chosen subset of the \eqn{p - 1} factors of \eqn{m} (excluding \eqn{m}
 itself).}
@@ -87,7 +87,12 @@ fitted model and reconciliation settings (see, \link[FoReco:recoinfo]{FoReco::re
 on new base forecasts (see, \link{extract_reconciled_ml}).
 }
 \description{
-TODO
+This function performs machine-learning–based temporal forecast
+reconciliation for linearly constrained multiple time series based on the
+cross-temporal approach proposed by Rombouts et al. (2024). Reconciled
+forecasts are obtained by fitting non-linear models that map base forecasts
+across both temporal dimensions to high-frequency series. Fully coherent
+forecasts are then derived by temporal bottom-up.
 }
 \examples{
 # m: quarterly temporal aggregation order
@@ -189,6 +194,11 @@ reco_new <- terml(base = base_new, fit = mdl2, agg_order = m)
 Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
 solar forecasts, \emph{Solar Energy}, 251, 13–29.
 \doi{10.1016/j.solener.2023.01.003}
+
+Girolimetto, D. and Di Fonzo, T. (2023), Point and probabilistic forecast
+reconciliation for general linearly constrained multiple time series,
+\emph{Statistical Methods & Applications}, 33, 581-607.
+\doi{10.1007/s10260-023-00738-6}.
 
 Rombouts, J., Ternes, M., and Wilms, I. (2025). Cross-temporal forecast
 reconciliation at digital platforms with machine learning.

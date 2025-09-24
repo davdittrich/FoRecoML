@@ -1,6 +1,15 @@
 #' Cross-temporal Reconciliation with Machine Learning
 #'
-#' TODO
+#' This function performs machine-learning–based cross-temporal forecast
+#' reconciliation for linearly constrained multiple time series (Rombouts et
+#' al., 2024). Reconciled forecasts are obtained by fitting non-linear models
+#' that map base forecasts across both temporal and cross-sectional dimensions
+#' to bottom-level high-frequency series. Fully coherent forecasts across all
+#' temporal and cross-sectional linear combinations are then derived by
+#' cross-temporal bottom-up. While the approach is designed for hierarchical
+#' and grouped structures, in the case of general linearly constrained time
+#' series it can be applied within the broader reconciliation framework
+#' described by Girolimetto and Di Fonzo (2024).
 #'
 #' @usage
 #' ctrml(base, hat, obs, agg_mat, agg_order, features = "all",
@@ -75,6 +84,11 @@
 #' Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
 #' solar forecasts, \emph{Solar Energy}, 251, 13–29.
 #' \doi{10.1016/j.solener.2023.01.003}
+#'
+#' Girolimetto, D. and Di Fonzo, T. (2023), Point and probabilistic forecast
+#' reconciliation for general linearly constrained multiple time series,
+#' \emph{Statistical Methods & Applications}, 33, 581-607.
+#' \doi{10.1007/s10260-023-00738-6}.
 #'
 #' Rombouts, J., Ternes, M., and Wilms, I. (2025). Cross-temporal forecast
 #' reconciliation at digital platforms with machine learning.
@@ -209,17 +223,43 @@
 #'                   agg_mat = agg_mat)
 #'
 #' @export
-ctrml <- function(base, hat, obs, agg_mat, agg_order, features = "all",
-                  approach = "randomForest", params = NULL, tuning = NULL,
-                  fit = NULL, tew = "sum", sntz = FALSE, round = FALSE,
-                  seed = NULL){
-
-  features <- match.arg(features, c("hfbts", "hfts", "bts", "str", "str-hfbts",
-                                    "str-bts", "all", "rtw-full", "rtw-comp"))
+ctrml <- function(
+  base,
+  hat,
+  obs,
+  agg_mat,
+  agg_order,
+  features = "all",
+  approach = "randomForest",
+  params = NULL,
+  tuning = NULL,
+  fit = NULL,
+  tew = "sum",
+  sntz = FALSE,
+  round = FALSE,
+  seed = NULL
+) {
+  features <- match.arg(
+    features,
+    c(
+      "hfbts",
+      "hfts",
+      "bts",
+      "str",
+      "str-hfbts",
+      "str-bts",
+      "all",
+      "rtw-full",
+      "rtw-comp"
+    )
+  )
 
   # Check if 'agg_order' is provided
-  if(missing(agg_order)){
-    cli_abort("Argument {.arg agg_order} is missing, with no default.", call = NULL)
+  if (missing(agg_order)) {
+    cli_abort(
+      "Argument {.arg agg_order} is missing, with no default.",
+      call = NULL
+    )
   }
 
   tmp <- cttools(agg_mat = agg_mat, agg_order = agg_order, tew = tew)
@@ -231,150 +271,186 @@ ctrml <- function(base, hat, obs, agg_mat, agg_order, features = "all",
 
   block_sampling <- NULL # block_sampling for the block tuning rtw option on mlr3
 
-  if(is.null(fit)){
-    if(missing(obs)){
+  if (is.null(fit)) {
+    if (missing(obs)) {
       cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
-    }else if(NCOL(obs) %% tmp$dim[["m"]] != 0){
+    } else if (NCOL(obs) %% tmp$dim[["m"]] != 0) {
       cli_abort("Incorrect {.arg obs} columns dimension.", call = NULL)
-    }else if(NROW(obs) != tmp$dim[["nb"]]){
+    } else if (NROW(obs) != tmp$dim[["nb"]]) {
       cli_abort("Incorrect {.arg obs} rows dimension.", call = NULL)
-    }else{
-      if(grepl("rtw", features)){
+    } else {
+      if (grepl("rtw", features)) {
         obs <- t(obs)
-      }else{
-        obs <- matrix(as.vector(t(obs)), ncol = tmp$dim[["m"]]*tmp$dim[["nb"]])
+      } else {
+        obs <- matrix(
+          as.vector(t(obs)),
+          ncol = tmp$dim[["m"]] * tmp$dim[["nb"]]
+        )
       }
-
     }
 
-    if(missing(hat)){
+    if (missing(hat)) {
       cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
-    }else if(NCOL(hat) %% tmp$dim[["kt"]] != 0){
+    } else if (NCOL(hat) %% tmp$dim[["kt"]] != 0) {
       cli_abort("Incorrect {.arg hat} columns dimension.", call = NULL)
-    }else if(NROW(hat) != tmp$dim[["n"]]){
+    } else if (NROW(hat) != tmp$dim[["n"]]) {
       cli_abort("Incorrect {.arg hat} rows dimension.", call = NULL)
-    }else{
-      if(grepl("rtw", features)){
+    } else {
+      if (grepl("rtw", features)) {
         hat <- input2rtw(hat, tmp$set)
-      }else{
+      } else {
         h <- NCOL(hat) / tmp$dim[["kt"]]
         hat <- mat2hmat(hat, h = h, kset = tmp$set, n = tmp$dim[["n"]])
       }
     }
 
-    if(missing(base)){
+    if (missing(base)) {
       base <- NULL
-    }else if(NCOL(base) %% tmp$dim[["kt"]] != 0){
+    } else if (NCOL(base) %% tmp$dim[["kt"]] != 0) {
       cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
-    }else if(NROW(base) != tmp$dim[["n"]]){
+    } else if (NROW(base) != tmp$dim[["n"]]) {
       cli_abort("Incorrect {.arg base} rows dimension.", call = NULL)
-    }else{
+    } else {
       h <- NCOL(base) / tmp$dim[["kt"]]
-      if(grepl("rtw", features)){
+      if (grepl("rtw", features)) {
         base <- input2rtw(base, tmp$set)
-      }else{
+      } else {
         # Calculate 'h' and 'base_hmat'
         base <- mat2hmat(base, h = h, kset = tmp$set, n = tmp$dim[["n"]])
       }
     }
 
-    switch(features,
-           "hfbts" = {
-             sel_mat <- as(id_hfbts, "sparseVector")
-           },
-           "hfts" = {
-             sel_mat <- as(rep(id_hfts, tmp$dim[["n"]]), "sparseVector")
-           },
-           "bts" = {
-             sel_mat <- as(rep(id_bts, each = tmp$dim[["kt"]]), "sparseVector")
-           },
-           "str" = {
-             sel_mat <- strc_mat
-           },
-           "str-hfbts" = {
-             sel_mat <- strc_mat + Matrix(rep(id_hfbts, tmp$dim[["nb"]]*tmp$dim[["m"]]),
-                                          ncol = tmp$dim[["nb"]]*tmp$dim[["m"]], sparse = TRUE)
-             sel_mat[sel_mat != 0] <- 1
-           },
-           "str-bts" = {
-             sel_mat <- strc_mat + Matrix(rep(rep(id_bts, each = tmp$dim[["kt"]]),
-                                              tmp$dim[["nb"]]*tmp$dim[["m"]]),
-                                          ncol = tmp$dim[["nb"]]*tmp$dim[["m"]], sparse = TRUE)
-             sel_mat[sel_mat != 0] <- 1
-           },
-           "all" = {
-             sel_mat <- 1
-           },
-           "rtw-full" = {
-             sel_mat <- 1
-             block_sampling <- tmp$dim[["m"]]
-           },
-           "rtw-comp" = {
-             pos <- seq(tmp$dim[["na"]], by = tmp$dim[["n"]], length.out = tmp$dim[["p"]])
-             sel_mat <- t(Matrix::bandSparse(tmp$dim[["nb"]], tmp$dim[["n"]]*tmp$dim[["p"]], pos)*1)
-             sel_mat[1:tmp$dim[["n"]],] <- 1
-             block_sampling <- tmp$dim[["m"]]
-           }
+    switch(
+      features,
+      "hfbts" = {
+        sel_mat <- as(id_hfbts, "sparseVector")
+      },
+      "hfts" = {
+        sel_mat <- as(rep(id_hfts, tmp$dim[["n"]]), "sparseVector")
+      },
+      "bts" = {
+        sel_mat <- as(rep(id_bts, each = tmp$dim[["kt"]]), "sparseVector")
+      },
+      "str" = {
+        sel_mat <- strc_mat
+      },
+      "str-hfbts" = {
+        sel_mat <- strc_mat +
+          Matrix(
+            rep(id_hfbts, tmp$dim[["nb"]] * tmp$dim[["m"]]),
+            ncol = tmp$dim[["nb"]] * tmp$dim[["m"]],
+            sparse = TRUE
+          )
+        sel_mat[sel_mat != 0] <- 1
+      },
+      "str-bts" = {
+        sel_mat <- strc_mat +
+          Matrix(
+            rep(
+              rep(id_bts, each = tmp$dim[["kt"]]),
+              tmp$dim[["nb"]] * tmp$dim[["m"]]
+            ),
+            ncol = tmp$dim[["nb"]] * tmp$dim[["m"]],
+            sparse = TRUE
+          )
+        sel_mat[sel_mat != 0] <- 1
+      },
+      "all" = {
+        sel_mat <- 1
+      },
+      "rtw-full" = {
+        sel_mat <- 1
+        block_sampling <- tmp$dim[["m"]]
+      },
+      "rtw-comp" = {
+        pos <- seq(
+          tmp$dim[["na"]],
+          by = tmp$dim[["n"]],
+          length.out = tmp$dim[["p"]]
+        )
+        sel_mat <- t(
+          Matrix::bandSparse(
+            tmp$dim[["nb"]],
+            tmp$dim[["n"]] * tmp$dim[["p"]],
+            pos
+          ) *
+            1
+        )
+        sel_mat[1:tmp$dim[["n"]], ] <- 1
+        block_sampling <- tmp$dim[["m"]]
+      }
     )
     attr(sel_mat, "sel_method") <- features
-  }else{
+  } else {
     hat <- NULL
     obs <- NULL
     sel_mat <- NULL
     approach <- fit$approach
     features <- attr(fit$sel_mat, "sel_method")
 
-    if(missing(base)){
-      cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
-    }else if(NCOL(base) %% tmp$dim[["kt"]] != 0){
+    if (missing(base)) {
+      cli_abort(
+        "Argument {.arg base} is missing, with no default.",
+        call = NULL
+      )
+    } else if (NCOL(base) %% tmp$dim[["kt"]] != 0) {
       cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
-    }else if(NROW(base) != tmp$dim[["n"]]){
+    } else if (NROW(base) != tmp$dim[["n"]]) {
       cli_abort("Incorrect {.arg base} rows dimension.", call = NULL)
-    }else{
+    } else {
       h <- NCOL(base) / tmp$dim[["kt"]]
-      if(grepl("rtw", features)){
+      if (grepl("rtw", features)) {
         base <- input2rtw(base, tmp$set)
-      }else{
+      } else {
         base <- mat2hmat(base, h = h, kset = tmp$set, n = tmp$dim[["n"]])
       }
     }
   }
 
-  reco_mat <- rml(base = base,
-                  hat = hat,
-                  obs = obs,
-                  sel_mat = sel_mat,
-                  approach = approach,
-                  params = params,
-                  seed = seed,
-                  fit = fit,
-                  tuning = tuning,
-                  block_sampling = block_sampling)
+  reco_mat <- rml(
+    base = base,
+    hat = hat,
+    obs = obs,
+    sel_mat = sel_mat,
+    approach = approach,
+    params = params,
+    seed = seed,
+    fit = fit,
+    tuning = tuning,
+    block_sampling = block_sampling
+  )
 
-  if(!is.null(base)){
+  if (!is.null(base)) {
     fit <- attr(reco_mat, "fit")
     fit$approach <- approach
     attr(reco_mat, "fit") <- NULL
-    if(!grepl("rtw", features)){
+    if (!grepl("rtw", features)) {
       reco_mat <- matrix(as.vector(reco_mat), ncol = tmp$dim[["nb"]])
     }
 
-    if(round){
+    if (round) {
       reco_mat <- round(reco_mat)
     }
 
-    reco_mat <- ctbu(t(reco_mat), agg_order = agg_order, agg_mat = agg_mat,
-                     sntz = sntz, tew = tew)
+    reco_mat <- ctbu(
+      t(reco_mat),
+      agg_order = agg_order,
+      agg_mat = agg_mat,
+      sntz = sntz,
+      tew = tew
+    )
 
-    attr(reco_mat, "FoReco") <- list2env(list(fit = fit,
-                                         framework = "Cross-temporal",
-                                         forecast_horizon = h,
-                                         te_set = tmp$set,
-                                         cs_n = tmp$dim[["n"]],
-                                         rfun = "ctrml",
-                                         ml = approach))
+    attr(reco_mat, "FoReco") <- list2env(list(
+      fit = fit,
+      framework = "Cross-temporal",
+      forecast_horizon = h,
+      te_set = tmp$set,
+      cs_n = tmp$dim[["n"]],
+      rfun = "ctrml",
+      ml = approach
+    ))
     return(reco_mat)
-  }else{
+  } else {
     reco_mat$approach <- approach
     return(reco_mat)
   }

@@ -1,6 +1,16 @@
 #' Cross-sectional Reconciliation with Machine Learning
 #'
-#' TODO
+#' This function performs machine-learning–based cross-sectional forecast
+#' reconciliation for linearly constrained (e.g., hierarchical/grouped)
+#' multiple time series (Spiliotis et al., 2021). Reconciled forecasts are
+#' obtained by training non-linear predictive models (e.g., random forests,
+#' gradient boosting) that learn mappings from base forecasts across all
+#' series to bottom-level series values. Coherent forecasts for the entire
+#' hierarchy are then derived by aggregating the reconciled bottom-level
+#' forecasts through the summing constraints. While the approach is designed
+#' for hierarchical and grouped structures, in the case of general linearly
+#' constrained time series it can be applied within the broader reconciliation
+#' framework described by Girolimetto and Di Fonzo (2024).
 #'
 #' @usage
 #' csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
@@ -32,6 +42,11 @@
 #' Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
 #' solar forecasts, \emph{Solar Energy}, 251, 13–29.
 #' \doi{10.1016/j.solener.2023.01.003}
+#'
+#' Girolimetto, D. and Di Fonzo, T. (2023), Point and probabilistic forecast
+#' reconciliation for general linearly constrained multiple time series,
+#' \emph{Statistical Methods & Applications}, 33, 581-607.
+#' \doi{10.1007/s10260-023-00738-6}.
 #'
 #' Spiliotis, E., Abolghasemi, M., Hyndman, R. J., Petropoulos, F., and
 #' Assimakopoulos, V. (2021). Hierarchical forecast reconciliation with machine
@@ -142,13 +157,27 @@
 #' reco_new <- csrml(base = base_new, fit = mdl, agg_mat = agg_mat)
 #'
 #' @export
-csrml <- function(base, hat, obs, agg_mat, features = "all",
-                  approach = "randomForest", params = NULL, tuning = NULL,
-                  fit = NULL, sntz = FALSE, round = FALSE, seed = NULL){
+csrml <- function(
+  base,
+  hat,
+  obs,
+  agg_mat,
+  features = "all",
+  approach = "randomForest",
+  params = NULL,
+  tuning = NULL,
+  fit = NULL,
+  sntz = FALSE,
+  round = FALSE,
+  seed = NULL
+) {
   features <- match.arg(features, c("all", "bts", "str", "str-bts"))
 
-  if(missing(agg_mat)){
-    cli_abort("Argument {.arg agg_mat} is missing, with no default.", call = NULL)
+  if (missing(agg_mat)) {
+    cli_abort(
+      "Argument {.arg agg_mat} is missing, with no default.",
+      call = NULL
+    )
   }
 
   tmp <- cstools(agg_mat = agg_mat)
@@ -156,49 +185,53 @@ csrml <- function(base, hat, obs, agg_mat, features = "all",
   nb <- tmp$dim[["nb"]]
   strc_mat <- tmp$strc_mat
   agg_mat <- tmp$agg_mat
-  id_bts <- c(rep(0, n-nb), rep(1, nb))
+  id_bts <- c(rep(0, n - nb), rep(1, nb))
 
-  if(is.null(fit)){
-    if(missing(obs)){
+  if (is.null(fit)) {
+    if (missing(obs)) {
       cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
-    }else if(NCOL(obs) != nb){
+    } else if (NCOL(obs) != nb) {
       cli_abort("Incorrect {.arg obs} columns dimension.", call = NULL)
     }
 
-    if(missing(hat)){
+    if (missing(hat)) {
       cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
     }
 
-    if(missing(base)){
+    if (missing(base)) {
       base <- NULL
     }
 
-    switch(features,
-           "bts" = {
-             sel_mat <- Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
-           },
-           "str" = {
-             sel_mat <- strc_mat
-           },
-           "str-bts" = {
-             sel_mat <- strc_mat + Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
-             sel_mat[sel_mat != 0] <- 1
-           },
-           "all" = {
-             sel_mat <- Matrix(1, nrow = n, ncol = nb, sparse = TRUE)
-           }
+    switch(
+      features,
+      "bts" = {
+        sel_mat <- Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+      },
+      "str" = {
+        sel_mat <- strc_mat
+      },
+      "str-bts" = {
+        sel_mat <- strc_mat + Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+        sel_mat[sel_mat != 0] <- 1
+      },
+      "all" = {
+        sel_mat <- Matrix(1, nrow = n, ncol = nb, sparse = TRUE)
+      }
     )
     attr(sel_mat, "sel_method") <- features
-  }else{
+  } else {
     hat <- NULL
     obs <- NULL
     sel_mat <- NULL
     approach <- fit$approach
     features <- attr(fit$sel_mat, "sel_method")
 
-    if(missing(base)){
-      cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
-    }else if(NCOL(base) != n){
+    if (missing(base)) {
+      cli_abort(
+        "Argument {.arg base} is missing, with no default.",
+        call = NULL
+      )
+    } else if (NCOL(base) != n) {
       cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
     }
   }
@@ -298,34 +331,38 @@ csrml <- function(base, hat, obs, agg_mat, features = "all",
   #   }
   # }
 
-  reco_mat <- rml(base = base,
-                  hat = hat,
-                  obs = obs,
-                  sel_mat = sel_mat,
-                  approach = approach,
-                  params = params,
-                  seed = seed,
-                  fit = fit,
-                  tuning = tuning)
+  reco_mat <- rml(
+    base = base,
+    hat = hat,
+    obs = obs,
+    sel_mat = sel_mat,
+    approach = approach,
+    params = params,
+    seed = seed,
+    fit = fit,
+    tuning = tuning
+  )
 
-  if(!is.null(base)){
+  if (!is.null(base)) {
     fit <- attr(reco_mat, "fit")
     fit$approach <- approach
     attr(reco_mat, "fit") <- NULL
     reco_mat <- csbu(reco_mat, agg_mat = agg_mat, sntz = sntz)
 
-    if(round){
+    if (round) {
       reco_mat <- round(reco_mat)
     }
 
-    attr(reco_mat, "FoReco") <- list2env(list(fit = fit,
-                                              framework = "Cross-sectional",
-                                              forecast_horizon = NROW(reco_mat),
-                                              cs_n = n,
-                                              rfun = "csrml",
-                                              ml = approach))
+    attr(reco_mat, "FoReco") <- list2env(list(
+      fit = fit,
+      framework = "Cross-sectional",
+      forecast_horizon = NROW(reco_mat),
+      cs_n = n,
+      rfun = "csrml",
+      ml = approach
+    ))
     return(reco_mat)
-  }else{
+  } else {
     reco_mat$approach <- approach
     return(reco_mat)
   }
