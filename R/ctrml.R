@@ -269,7 +269,8 @@ ctrml <- function(
   id_hfts <- c(rep(0, tmp$dim[["ks"]]), rep(1, tmp$dim[["m"]]))
   id_hfbts <- as.numeric(kronecker(id_bts, id_hfts))
 
-  block_sampling <- NULL # block_sampling for the block tuning rtw option on mlr3
+  # block_sampling for the block tuning rtw option on mlr3
+  block_sampling <- NULL
 
   if (is.null(fit)) {
     if (missing(obs)) {
@@ -368,14 +369,12 @@ ctrml <- function(
           by = tmp$dim[["n"]],
           length.out = tmp$dim[["p"]]
         )
-        sel_mat <- t(
-          Matrix::bandSparse(
-            tmp$dim[["nb"]],
-            tmp$dim[["n"]] * tmp$dim[["p"]],
-            pos
-          ) *
-            1
+        sel_mat <- Matrix::bandSparse(
+          tmp$dim[["nb"]],
+          tmp$dim[["n"]] * tmp$dim[["p"]],
+          pos
         )
+        sel_mat <- 1 * t(sel_mat))
         sel_mat[1:tmp$dim[["n"]], ] <- 1
         block_sampling <- tmp$dim[["m"]]
       }
@@ -428,15 +427,12 @@ ctrml <- function(
       reco_mat <- matrix(as.vector(reco_mat), ncol = tmp$dim[["nb"]])
     }
 
-    if (round) {
-      reco_mat <- round(reco_mat)
-    }
-
     reco_mat <- ctbu(
       t(reco_mat),
       agg_order = agg_order,
       agg_mat = agg_mat,
       sntz = sntz,
+      round = round,
       tew = tew
     )
 

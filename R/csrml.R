@@ -347,11 +347,7 @@ csrml <- function(
     fit <- attr(reco_mat, "fit")
     fit$approach <- approach
     attr(reco_mat, "fit") <- NULL
-    reco_mat <- csbu(reco_mat, agg_mat = agg_mat, sntz = sntz)
-
-    if (round) {
-      reco_mat <- round(reco_mat)
-    }
+    reco_mat <- csbu(reco_mat, agg_mat = agg_mat, round = round, sntz = sntz)
 
     attr(reco_mat, "FoReco") <- list2env(list(
       fit = fit,

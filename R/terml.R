@@ -284,13 +284,12 @@ terml <- function(
     fit <- attr(reco_mat, "fit")
     fit$approach <- approach
     attr(reco_mat, "fit") <- NULL
-    if (round) {
-      reco_mat <- round(reco_mat)
-    }
+
     reco_mat <- tebu(
       as.vector(t(reco_mat)),
       agg_order = agg_order,
       sntz = sntz,
+      round = round,
       tew = tew
     )
 
