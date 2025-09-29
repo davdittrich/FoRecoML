@@ -12,7 +12,6 @@ status](https://www.r-pkg.org/badges/version/FoRecoML)](https://CRAN.R-project.o
 version](https://img.shields.io/badge/devel%20version-0.0.1.9000-blue.svg)](https://github.com/danigiro/FoRecoML)
 [![License:
 GPL-3](https://img.shields.io/badge/license-GPL--3-forestgreen.svg)](https://cran.r-project.org/web/licenses/GPL-3)
-[![R-CMD-check](https://github.com/danigiro/FoRecoML/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/danigiro/FoRecoML/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 The goal of FoRecoML is to …

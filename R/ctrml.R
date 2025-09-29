@@ -374,7 +374,7 @@ ctrml <- function(
           tmp$dim[["n"]] * tmp$dim[["p"]],
           pos
         )
-        sel_mat <- 1 * t(sel_mat))
+        sel_mat <- 1 * t(sel_mat)
         sel_mat[1:tmp$dim[["n"]], ] <- 1
         block_sampling <- tmp$dim[["m"]]
       }
