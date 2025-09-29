@@ -6,28 +6,28 @@ Authors@R: c(
     person(
       given = "Daniele", 
       family = "Girolimetto",
-      role = c("aut", "cre", "fnd"),
+      role = c("aut", "cre"),
       email = "daniele.girolimetto@unipd.it",
       comment = c(ORCID = "0000-0001-9387-1232")
     ),
     person(
       given = "Jeroen", 
       family = "Rombouts",
-      role = c("aut", "fnd"),
+      role = c("aut"),
       email = "b00469813@essec.edu",
       comment = c(ORCID = "0000-0003-2255-4875")
     ),
     person(
       given = "Ines", 
       family = "Wilms",
-      role = c("aut", "fnd"),
+      role = c("aut"),
       email = "i.wilms@maastrichtuniversity.nl",
       comment = c(ORCID = "0000-0003-3269-4601")
     ),
     person(
       given = "Yangzhuoran Fin", 
       family = "Yang",
-      role = c("aut", "fnd"),
+      role = c("aut"),
       email = "yangzhuoran.yang@maastrichtuniversity.nl",
       comment = c(ORCID = "0000-0002-1232-8017")
     )
