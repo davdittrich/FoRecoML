@@ -9,7 +9,7 @@
 [![CRAN
 status](https://www.r-pkg.org/badges/version/FoRecoML)](https://CRAN.R-project.org/package=FoRecoML)
 [![devel
-version](https://img.shields.io/badge/devel%20version-0.0.1.9000-blue.svg)](https://github.com/danigiro/FoRecoML)
+version](https://img.shields.io/badge/devel%20version-0.0.0.9000-blue.svg)](https://github.com/danigiro/FoRecoML)
 [![License:
 GPL-3](https://img.shields.io/badge/license-GPL--3-forestgreen.svg)](https://cran.r-project.org/web/licenses/GPL-3)
 <!-- badges: end -->
