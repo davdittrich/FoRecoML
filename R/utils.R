@@ -28,16 +28,21 @@
 #' mdl2 <- extract_reconciled_ml(mdl)
 #' }
 #' @export
-extract_reconciled_ml <- function(reco){
-  if(inherits(reco, "rml_fit")){
-    cli_inform("Input {.arg reco} is already an {.cls rml_fit}; returning it unchanged.")
+extract_reconciled_ml <- function(reco) {
+  if (inherits(reco, "rml_fit")) {
+    cli_inform(
+      "Input {.arg reco} is already an {.cls rml_fit}; returning it unchanged."
+    )
     return(reco)
   }
 
   info <- tryCatch(
     suppressWarnings(recoinfo(reco, verbose = FALSE)),
     error = function(e) {
-      cli_warn("Failed to retrieve reconciliation info: {conditionMessage(e)}", call = NULL)
+      cli_warn(
+        "Failed to retrieve reconciliation info: {conditionMessage(e)}",
+        call = NULL
+      )
       return(NULL)
     }
   )
@@ -50,7 +55,7 @@ extract_reconciled_ml <- function(reco){
   return(info$fit)
 }
 
-print.rml_fit <- function(x, ...){
+print.rml_fit <- function(x, ...) {
   cat("----- Reconciled models -----\n")
   cat("Features:", attr(x$sel_mat, "sel_method"), "\n")
   cat("Approach:", x$approach, "\n")
@@ -58,13 +63,13 @@ print.rml_fit <- function(x, ...){
 }
 
 # Rombouts et al. (2025) matrix-form
-input2rtw <- function(x, kset){
+input2rtw <- function(x, kset) {
   x <- FoReco::FoReco2matrix(x, kset)
-  x <- lapply(1:length(kset), function(i){
-    if(NCOL(x[[i]])>1){
+  x <- lapply(1:length(kset), function(i) {
+    if (NCOL(x[[i]]) > 1) {
       tmp <- apply(x[[i]], 2, rep, each = kset[i])
       #colnames(tmp) <- paste0(colnames(tmp), "_", kset[i])
-    }else{
+    } else {
       tmp <- rep(x[[i]], each = kset[i])
     }
     tmp
