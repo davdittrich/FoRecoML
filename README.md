@@ -14,25 +14,48 @@ version](https://img.shields.io/badge/devel%20version-0.0.0.9000-blue.svg)](http
 GPL-3](https://img.shields.io/badge/license-GPL--3-forestgreen.svg)](https://cran.r-project.org/web/licenses/GPL-3)
 <!-- badges: end -->
 
-The goal of FoRecoML is to …
+**Fo**recast **Reco**nciliation is a post-forecasting process designed
+to improve accuracy and align forecasts within systems of linearly
+constrained time series (e.g. hierarchical or grouped). The **FoRecoML**
+package provides nonlinear forecast reconciliation procedures using
+**M**achine **L**earning in cross-sectional, temporal, and
+cross-temporal settings. `FoRecoML` inherits time series processing
+functionalities from [`FoReco`](https://danigiro.github.io/FoReco/).
+
+The core functions for reconciliation are:
+
+- `csrml()` Cross-sectional Reconciliation with Machine Learning
+
+- `terml()` Temporal Reconciliation with Machine Learning
+
+- `ctrml()` Cross-temporal Reconciliation with Machine Learning
+
+- `extract_reconciled_ml()` Extraction of the fitted machine learning
+  model used for forecast reconciliation from the output of one of the
+  reconciliation function. The fitted machine learning model can be
+  reused for different sets of data with the same hierarchical
+  structure.
+
+Machine learning models that can be used with `FoRecoML` include random
+forest (`randomForest`), extreme gradient boosting (`xgboost`), light
+gradient boosting machine (`lightgbm`), and models supported by the
+`mlr3` package.
 
 ## Installation
 
-You can install the development version of FoRecoML from
-[GitHub](https://github.com/) with:
+You can install the **stable** version on
+[CRAN](https://CRAN.R-project.org/package=FoRecoML)
 
 ``` r
-# install.packages("pak")
-pak::pak("danigiro/FoRecoML")
+install.packages("FoRecoML")
 ```
 
-## Example
-
-This is a basic example which shows you how to solve a common problem:
+You can install the **development** version of `FoRecoML` from
+[GitHub](https://github.com/danigiro/FoRecoML)
 
 ``` r
-#library(FoRecoML)
-## basic example code
+# install.packages("devtools")
+devtools::install_github("danigiro/FoRecoML")
 ```
 
 ## Code of Conduct
