@@ -14,7 +14,7 @@ Authors@R: c(
       given = "Yangzhuoran Fin", 
       family = "Yang",
       role = c("aut"),
-      email = "yangzhuoran.yang@maastrichtuniversity.nl",
+      email = "yangyangzhuoran@gmail.com",
       comment = c(ORCID = "0000-0002-1232-8017")
     ),
     person(
