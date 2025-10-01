@@ -24,6 +24,7 @@
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Forecast Reconciliation with Machine Learning">
 <meta name="description" content="More about what it does (maybe more than one line). Continuation lines should be indented.">
 <meta property="og:description" content="More about what it does (maybe more than one line). Continuation lines should be indented.">
+<meta property="og:image" content="https://danigiro.github.io/FoRecoML/logo.svg">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -57,26 +58,31 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="forecoml">FoRecoML<a class="anchor" aria-label="anchor" href="#forecoml"></a>
-</h1></div>
+<div class="page-header">
+<img src="logo.svg" class="logo" alt=""><h1 id="forecoml-">FoRecoML <a class="anchor" aria-label="anchor" href="#forecoml-"></a>
+</h1>
+</div>
 <!-- badges: start -->
 
-<p>The goal of FoRecoML is to …</p>
+<p><strong>Fo</strong>recast <strong>Reco</strong>nciliation is a post-forecasting process designed to improve accuracy and align forecasts within systems of linearly constrained time series (e.g. hierarchical or grouped). The <strong>FoRecoML</strong> package provides nonlinear forecast reconciliation procedures using <strong>M</strong>achine <strong>L</strong>earning in cross-sectional, temporal, and cross-temporal settings. <code>FoRecoML</code> inherits time series processing functionalities from <a href="https://danigiro.github.io/FoReco/" class="external-link"><code>FoReco</code></a>.</p>
+<p>The core functions for reconciliation are:</p>
+<ul>
+<li><p><code><a href="reference/csrml.html">csrml()</a></code> Cross-sectional Reconciliation with Machine Learning</p></li>
+<li><p><code><a href="reference/terml.html">terml()</a></code> Temporal Reconciliation with Machine Learning</p></li>
+<li><p><code><a href="reference/ctrml.html">ctrml()</a></code> Cross-temporal Reconciliation with Machine Learning</p></li>
+<li><p><code><a href="reference/extract_reconciled_ml.html">extract_reconciled_ml()</a></code> Extraction of the fitted machine learning model used for forecast reconciliation from the output of one of the reconciliation function. The fitted machine learning model can be reused for different sets of data with the same hierarchical structure.</p></li>
+</ul>
+<p>Machine learning models that can be used with <code>FoRecoML</code> include random forest (<code>randomForest</code>), extreme gradient boosting (<code>xgboost</code>), light gradient boosting machine (<code>lightgbm</code>), and models supported by the <code>mlr3</code> package.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>You can install the development version of FoRecoML from <a href="https://github.com/" class="external-link">GitHub</a> with:</p>
+<p>You can install the <strong>stable</strong> version on <a href="https://CRAN.R-project.org/package=FoRecoML" class="external-link">CRAN</a></p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
-<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"danigiro/FoRecoML"</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level2">
-<h2 id="example">Example<a class="anchor" aria-label="anchor" href="#example"></a>
-</h2>
-<p>This is a basic example which shows you how to solve a common problem:</p>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"FoRecoML"</span><span class="op">)</span></span></code></pre></div>
+<p>You can install the <strong>development</strong> version of <code>FoRecoML</code> from <a href="https://github.com/danigiro/FoRecoML" class="external-link">GitHub</a></p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co">#library(FoRecoML)</span></span>
-<span><span class="co">## basic example code</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="co"># install.packages("devtools")</span></span>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"danigiro/FoRecoML"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="code-of-conduct">Code of Conduct<a class="anchor" aria-label="anchor" href="#code-of-conduct"></a>

@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# FoRecoML
+# FoRecoML <img src="man/figures/logo.svg" alt="logo" align="right" width="150" style="border: none; float: right;"/>
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/danigiro/FoRecoML/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/danigiro/FoRecoML/actions/workflows/R-CMD-check.yaml) 

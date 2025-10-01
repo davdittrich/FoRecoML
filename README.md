@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# FoRecoML
+# FoRecoML <img src="man/figures/logo.svg" alt="logo" align="right" width="150" style="border: none; float: right;"/>
 
 <!-- badges: start -->
 
