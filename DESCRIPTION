@@ -21,7 +21,7 @@ Authors@R: c(
       given = "Jeroen", 
       family = "Rombouts",
       role = c("aut"),
-      email = "b00469813@essec.edu",
+      email = "rombouts@essec.edu",
       comment = c(ORCID = "0000-0003-2255-4875")
     ),
     person(
