@@ -37,9 +37,9 @@ rml <- function(
     obs <- unname(obs)
     p <- NCOL(obs)
 
-    if (!is.null(seed)) {
-      set.seed(seed)
-    }
+    # if (!is.null(seed)) {
+    #   set.seed(seed)
+    # }
   } else {
     sel_mat <- fit$sel_mat
     p <- length(fit$fit)

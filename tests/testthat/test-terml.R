@@ -27,14 +27,13 @@ if (require(testthat)) {
 
   test_that("Approach and features", {
     for (i in c("xgboost", "mlr3", "lightgbm", "randomForest")) {
-      for (j in c("all", "hfts", "str", "str-hfts", "rtw")) {
+      for (j in c("rtw")) {
         expect_no_error(terml(
           hat = hat,
           obs = obs,
           base = base,
           agg_order = m,
           approach = i,
-          seed = 123,
           features = j
         ))
       }
@@ -47,8 +46,7 @@ if (require(testthat)) {
       obs = obs,
       agg_order = m,
       approach = "lightgbm",
-      seed = 123,
-      features = "all"
+      features = "rtw"
     )
     r1 <- terml(
       hat = hat,
@@ -56,8 +54,7 @@ if (require(testthat)) {
       base = base,
       agg_order = m,
       approach = "lightgbm",
-      seed = 123,
-      features = "all"
+      features = "rtw"
     )
     mdl2 <- extract_reconciled_ml(r1)
 
@@ -78,8 +75,7 @@ if (require(testthat)) {
       obs = obs,
       agg_order = m,
       approach = "lightgbm",
-      seed = 123,
-      features = "all"
+      features = "rtw"
     )
     expect_error(terml(fit = mdl, agg_order = m))
   })

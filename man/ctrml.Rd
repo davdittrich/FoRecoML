@@ -4,9 +4,9 @@
 \alias{ctrml}
 \title{Cross-temporal Reconciliation with Machine Learning}
 \usage{
-ctrml(base, hat, obs, agg_mat, agg_order, features = "all",
+ctrml(base, hat, obs, agg_mat, agg_order, features = "rtw-all",
       approach = "randomForest", params = NULL, tuning = NULL,
-      fit = NULL, tew = "sum", sntz = FALSE, round = TRUE, seed = NULL)
+      fit = NULL, tew = "sum", sntz = FALSE, round = TRUE)
 }
 \arguments{
 \item{base}{A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
@@ -39,9 +39,8 @@ cross-sectional aggregation matrix. It maps the \eqn{n_b} bottom-level
 subset of \eqn{p} factors of \eqn{m}.}
 
 \item{features}{Character string specifying which features are used for model
-training. Options include "\code{hfbts}", "\code{hfts}", "\code{bts}",
-"\code{str}", "\code{str-hfbts}", "\code{str-bts}", "\code{all}"
-(\emph{default}), "\code{rtw-full}", and "\code{rtw-comp}".}
+training. Options include "\code{rtw-all}", and "\code{rtw-comp}"
+(\emph{default}).}
 
 \item{approach}{Character string specifying the machine learning method used
 for reconciliation. Options are:
@@ -61,7 +60,7 @@ package. The learner must be specified via \code{params}, e.g.
 ML approach These may include algorithm-specific hyperparameters for
 \pkg{randomForest}, \pkg{xgboost}, \pkg{lightgbm}, or learner options for
 \pkg{mlr3}. When \code{approach = "mlr3"}, the list must include
-\code{.key} to select the learner (e.g. \code{.key = "regr.xgboost"},
+\code{.key} to select the learner (e.g. \code{.key = "regr.ranger"},
 \emph{default}).}
 
 \item{tuning}{Optional list specifying tuning options when using the
@@ -85,8 +84,6 @@ Girolimetto, 2023). \emph{Default} is \code{FALSE}.}
 \item{round}{Logical. If \code{TRUE}, reconciled forecasts are rounded to
 integer values and coherence is ensured via a bottom-up adjustment.
 \emph{Default} is \code{FALSE}.}
-
-\item{seed}{Optional integer seed for reproducibility.}
 }
 \value{
 If \code{base} is provided, returns a cross-temporal reconciled
@@ -159,39 +156,36 @@ rownames(base) <- c("A", "B", "C")
 ##########################################################################
 # XGBoost Reconciliation (xgboost pkg)
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "xgboost", seed = 123,
-              features = "rtw-full")
+              agg_mat = agg_mat, approach = "xgboost", features = "rtw-all")
 
 # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "xgboost", seed = 123,
+              agg_mat = agg_mat, approach = "xgboost", features = "rtw-all",
               params =  list(
                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
                 max_depth = 6, gamma = 0, subsample = 1,
                 objective = "reg:tweedie", # Tweedie regression objective
                 tweedie_variance_power = 1.5 # Tweedie power parameter
-              ),
-              features = "rtw-full")
+              ))
 
 # LightGBM Reconciliation (lightgbm pkg)
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "lightgbm", seed = 123,
-              features = "rtw-full")
+              agg_mat = agg_mat, approach = "lightgbm",
+              features = "rtw-all")
 
 # Random Forest Reconciliation (randomForest pkg)
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "randomForest", seed = 123,
-              features = "rtw-full")
+              agg_mat = agg_mat, approach = "randomForest",
+              features = "rtw-all")
 
 # Using the mlr3 pkg:
 # With 'params = list(.key = mlr_learners)' we can specify different
 # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
 # "regr.xgboost" for XGBoost, and others.
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "mlr3", seed = 123,
+              agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
               # choose mlr3 learner (here Random Forest via ranger)
-              params = list(.key = "regr.ranger"),
-              features = "rtw-full")
+              params = list(.key = "regr.ranger"))
 \dontrun{
 # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
 # We can reduce excessive logging by calling:
@@ -200,7 +194,7 @@ if(requireNamespace("lgr", quietly = TRUE)){
   lgr::get_logger("bbotk")$set_threshold("warn")
 }
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "mlr3", seed = 123,
+              agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
               params = list(
                 .key = "regr.ranger",
                 # number of features tried at each split
@@ -209,8 +203,7 @@ reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
               tuning = list(
                 # stop after 10 evaluations
                 terminator = mlr3tuning::trm("evals", n_evals = 10)
-              ),
-              features = "rtw-full")
+              ))
 }
 ##########################################################################
 # Usage with pre-trained models
@@ -218,12 +211,11 @@ reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
 # Pre-trained machine learning models (e.g., omit the base param)
 mdl <- ctrml(hat = hat, obs = obs,
              agg_order = m, agg_mat = agg_mat, approach = "lightgbm",
-             seed = 123, features = "rtw-full")
+             features = "rtw-all")
 
 # Pre-trained machine learning models with base param
-reco <- ctrml(base = base, hat = hat, obs = obs,
-              agg_order = m, agg_mat = agg_mat, approach = "lightgbm",
-              seed = 123, features = "rtw-full")
+reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
+              agg_mat = agg_mat, approach = "lightgbm", features = "rtw-all")
 mdl2 <- extract_reconciled_ml(reco)
 
 # New base forecasts matrix

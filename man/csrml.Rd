@@ -5,8 +5,7 @@
 \title{Cross-sectional Reconciliation with Machine Learning}
 \usage{
 csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
-      params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = TRUE,
-      seed = NULL)
+      params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = TRUE)
 }
 \arguments{
 \item{base}{A (\eqn{h \times n}) numeric matrix or multivariate time series
@@ -47,7 +46,7 @@ package. The learner must be specified via \code{params}, e.g.
 ML approach These may include algorithm-specific hyperparameters for
 \pkg{randomForest}, \pkg{xgboost}, \pkg{lightgbm}, or learner options for
 \pkg{mlr3}. When \code{approach = "mlr3"}, the list must include
-\code{.key} to select the learner (e.g. \code{.key = "regr.xgboost"},
+\code{.key} to select the learner (e.g. \code{.key = "regr.ranger"},
 \emph{default}).}
 
 \item{tuning}{Optional list specifying tuning options when using the
@@ -66,8 +65,6 @@ Girolimetto, 2023). \emph{Default} is \code{FALSE}.}
 \item{round}{Logical. If \code{TRUE}, reconciled forecasts are rounded to
 integer values and coherence is ensured via a bottom-up adjustment.
 \emph{Default} is \code{FALSE}.}
-
-\item{seed}{Optional integer seed for reproducibility.}
 }
 \value{
 If \code{base} is provided, returns a cross-sectional reconciled
@@ -127,11 +124,11 @@ colnames(base) <- unlist(dimnames(agg_mat))
 ##########################################################################
 # XGBoost Reconciliation (xgboost pkg)
 reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-              approach = "xgboost", seed = 123, features = "all")
+              approach = "xgboost", features = "all")
 
 # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
 reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-              approach = "xgboost", seed = 123, features = "all",
+              approach = "xgboost", features = "all",
               params =  list(
                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
                 max_depth = 6, gamma = 0, subsample = 1,
@@ -141,18 +138,18 @@ reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
 
 # LightGBM Reconciliation (lightgbm pkg)
 reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-              approach = "lightgbm", seed = 123, features = "all")
+              approach = "lightgbm", features = "all")
 
 # Random Forest Reconciliation (randomForest pkg)
 reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-              approach = "randomForest", seed = 123, features = "all")
+              approach = "randomForest", features = "all")
 
 # Using the mlr3 pkg:
 # With 'params = list(.key = mlr_learners)' we can specify different
 # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
 # "regr.xgboost" for XGBoost, and others.
 reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-              approach = "mlr3", seed = 123, features = "all",
+              approach = "mlr3", features = "all",
               # choose mlr3 learner (here Random Forest via ranger)
               params = list(.key = "regr.ranger"))
 
@@ -164,7 +161,7 @@ if (requireNamespace("lgr", quietly = TRUE)) {
   lgr::get_logger("bbotk")$set_threshold("warn")
 }
 reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-              approach = "mlr3", seed = 123, features = "all",
+              approach = "mlr3", features = "all",
               params = list(
                 .key = "regr.ranger",
                 # number of features tried at each split
@@ -180,11 +177,11 @@ reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
 ##########################################################################
 # Pre-trained machine learning models (e.g., omit the base param)
 mdl <- csrml(hat = hat, obs = obs, agg_mat = agg_mat,
-             approach = "xgboost", seed = 123, features = "all")
+             approach = "xgboost", features = "all")
 
 # Pre-trained machine learning models with base param
 reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-              approach = "xgboost", seed = 123, features = "all")
+              approach = "xgboost", features = "all")
 mdl2 <- extract_reconciled_ml(reco)
 
 # New base forecasts matrix

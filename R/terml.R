@@ -10,7 +10,7 @@
 #' @usage
 #' terml(base, hat, obs, agg_order, features = "all", approach = "randomForest",
 #'       params = NULL, tuning = NULL, fit = NULL, tew = "sum", sntz = FALSE,
-#'       round = TRUE, seed = NULL)
+#'       round = TRUE)
 #'
 #' @param base A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
 #'   base forecasts to be reconciled, ordered from lowest to highest frequency;
@@ -26,8 +26,7 @@
 #'   for the highest frequency series (\eqn{k = 1}). These values are used to
 #'   train the ML approach.
 #' @param features Character string specifying which features are used for model
-#'   training. Options include "\code{hfts}", "\code{str}", "\code{str-hfts}",
-#'   "\code{all}" (\emph{default}), and "\code{rtw}".
+#'   training. Only "\code{rtw}" is available.
 #' @inheritParams ctrml
 #'
 #' @returns If \code{base} is provided, returns a temporal reconciled forecast
@@ -83,11 +82,11 @@
 #' ##########################################################################
 #' # XGBoost Reconciliation (xgboost pkg)
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "xgboost", seed = 123, features = "rtw")
+#'               approach = "xgboost", features = "rtw")
 #'
 #' # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "xgboost", seed = 123, features = "rtw",
+#'               approach = "xgboost", features = "rtw",
 #'               params =  list(
 #'                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
 #'                 max_depth = 6, gamma = 0, subsample = 1,
@@ -97,18 +96,18 @@
 #'
 #' # LightGBM Reconciliation (lightgbm pkg)
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "lightgbm", seed = 123, features = "rtw")
+#'               approach = "lightgbm", features = "rtw")
 #'
 #' # Random Forest Reconciliation (randomForest pkg)
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "randomForest", seed = 123, features = "rtw")
+#'               approach = "randomForest", features = "rtw")
 #'
 #' # Using the mlr3 pkg:
 #' # With 'params = list(.key = mlr_learners)' we can specify different
 #' # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
 #' # "regr.xgboost" for XGBoost, and others.
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "mlr3", seed = 123, features = "rtw",
+#'               approach = "mlr3", features = "rtw",
 #'               # choose mlr3 learner (here Random Forest via ranger)
 #'               params = list(.key = "regr.ranger"))
 #'
@@ -120,7 +119,7 @@
 #'   lgr::get_logger("bbotk")$set_threshold(NULL)
 #' }
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "mlr3", seed = 123, features = "rtw",
+#'               approach = "mlr3", features = "rtw",
 #'               params = list(
 #'                 .key = "regr.ranger",
 #'                 # number of features tried at each split
@@ -136,11 +135,11 @@
 #' ##########################################################################
 #' # Pre-trained machine learning models (e.g., omit the base param)
 #' mdl <- terml(hat = hat, obs = obs, agg_order = m,
-#'              approach = "lightgbm", seed = 123, features = "rtw")
+#'              approach = "lightgbm", features = "rtw")
 #'
 #' # Pre-trained machine learning models with base param
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "lightgbm", seed = 123, features = "rtw")
+#'               approach = "lightgbm", features = "rtw")
 #' mdl2 <- extract_reconciled_ml(reco)
 #'
 #' # New base forecasts matrix
@@ -153,18 +152,15 @@ terml <- function(
   hat,
   obs,
   agg_order,
-  features = "all",
+  features = "rtw",
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
   fit = NULL,
   tew = "sum",
   sntz = FALSE,
-  round = FALSE,
-  seed = NULL
+  round = FALSE
 ) {
-  features <- match.arg(features, c("all", "hfts", "str", "str-hfts", "rtw"))
-
   # Check if 'agg_order' is provided
   if (missing(agg_order)) {
     cli_abort(
@@ -240,6 +236,9 @@ terml <- function(
       "rtw" = {
         sel_mat <- 1
         block_sampling <- tmp$dim[["m"]]
+      },
+      {
+        cli_abort("Unknown {.arg features} option.", call = NULL)
       }
     )
     attr(sel_mat, "sel_method") <- features
@@ -274,7 +273,6 @@ terml <- function(
     sel_mat = sel_mat,
     approach = approach,
     params = params,
-    seed = seed,
     fit = fit,
     tuning = tuning,
     block_sampling = block_sampling

@@ -12,9 +12,9 @@
 #' described by Girolimetto and Di Fonzo (2024).
 #'
 #' @usage
-#' ctrml(base, hat, obs, agg_mat, agg_order, features = "all",
+#' ctrml(base, hat, obs, agg_mat, agg_order, features = "rtw-all",
 #'       approach = "randomForest", params = NULL, tuning = NULL,
-#'       fit = NULL, tew = "sum", sntz = FALSE, round = TRUE, seed = NULL)
+#'       fit = NULL, tew = "sum", sntz = FALSE, round = TRUE)
 #'
 #' @param base A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
 #'   forecasts to be reconciled; \eqn{n} is the total number of variables,
@@ -35,9 +35,8 @@
 #'   total number of high-frequency bottom variables. These values are used to
 #'   train the ML approach.
 #' @param features Character string specifying which features are used for model
-#'   training. Options include "\code{hfbts}", "\code{hfts}", "\code{bts}",
-#'   "\code{str}", "\code{str-hfbts}", "\code{str-bts}", "\code{all}"
-#'   (\emph{default}), "\code{rtw-full}", and "\code{rtw-comp}".
+#'   training. Options include "\code{rtw-all}", and "\code{rtw-comp}"
+#'   (\emph{default}).
 #' @param fit A pre-trained ML reconciliation model (see,
 #'   [extract_reconciled_ml]). If supplied, training data (\code{hat},
 #'   \code{obs}) are not required.
@@ -58,7 +57,7 @@
 #'   ML approach These may include algorithm-specific hyperparameters for
 #'   \pkg{randomForest}, \pkg{xgboost}, \pkg{lightgbm}, or learner options for
 #'   \pkg{mlr3}. When \code{approach = "mlr3"}, the list must include
-#'   \code{.key} to select the learner (e.g. \code{.key = "regr.xgboost"},
+#'   \code{.key} to select the learner (e.g. \code{.key = "regr.ranger"},
 #'   \emph{default}).
 #' @param sntz Logical. If \code{TRUE}, enforces non-negativity on reconciled
 #'   forecasts using the heuristic "set-negative-to-zero" (Di Fonzo and
@@ -66,7 +65,6 @@
 #' @param round Logical. If \code{TRUE}, reconciled forecasts are rounded to
 #'   integer values and coherence is ensured via a bottom-up adjustment.
 #'   \emph{Default} is \code{FALSE}.
-#' @param seed Optional integer seed for reproducibility.
 #' @param tuning Optional list specifying tuning options when using the
 #'   [mlr3tuning] framework (e.g., terminators, search spaces). The argument
 #'   format follows [mlr3tuning::auto_tuner], except that the learner is set
@@ -146,39 +144,36 @@
 #' ##########################################################################
 #' # XGBoost Reconciliation (xgboost pkg)
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "xgboost", seed = 123,
-#'               features = "rtw-full")
+#'               agg_mat = agg_mat, approach = "xgboost", features = "rtw-all")
 #'
 #' # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "xgboost", seed = 123,
+#'               agg_mat = agg_mat, approach = "xgboost", features = "rtw-all",
 #'               params =  list(
 #'                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
 #'                 max_depth = 6, gamma = 0, subsample = 1,
 #'                 objective = "reg:tweedie", # Tweedie regression objective
 #'                 tweedie_variance_power = 1.5 # Tweedie power parameter
-#'               ),
-#'               features = "rtw-full")
+#'               ))
 #'
 #' # LightGBM Reconciliation (lightgbm pkg)
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "lightgbm", seed = 123,
-#'               features = "rtw-full")
+#'               agg_mat = agg_mat, approach = "lightgbm",
+#'               features = "rtw-all")
 #'
 #' # Random Forest Reconciliation (randomForest pkg)
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "randomForest", seed = 123,
-#'               features = "rtw-full")
+#'               agg_mat = agg_mat, approach = "randomForest",
+#'               features = "rtw-all")
 #'
 #' # Using the mlr3 pkg:
 #' # With 'params = list(.key = mlr_learners)' we can specify different
 #' # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
 #' # "regr.xgboost" for XGBoost, and others.
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "mlr3", seed = 123,
+#'               agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
 #'               # choose mlr3 learner (here Random Forest via ranger)
-#'               params = list(.key = "regr.ranger"),
-#'               features = "rtw-full")
+#'               params = list(.key = "regr.ranger"))
 #' \dontrun{
 #' # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
 #' # We can reduce excessive logging by calling:
@@ -187,7 +182,7 @@
 #'   lgr::get_logger("bbotk")$set_threshold("warn")
 #' }
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "mlr3", seed = 123,
+#'               agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
 #'               params = list(
 #'                 .key = "regr.ranger",
 #'                 # number of features tried at each split
@@ -196,8 +191,7 @@
 #'               tuning = list(
 #'                 # stop after 10 evaluations
 #'                 terminator = mlr3tuning::trm("evals", n_evals = 10)
-#'               ),
-#'               features = "rtw-full")
+#'               ))
 #' }
 #' ##########################################################################
 #' # Usage with pre-trained models
@@ -205,12 +199,11 @@
 #' # Pre-trained machine learning models (e.g., omit the base param)
 #' mdl <- ctrml(hat = hat, obs = obs,
 #'              agg_order = m, agg_mat = agg_mat, approach = "lightgbm",
-#'              seed = 123, features = "rtw-full")
+#'              features = "rtw-all")
 #'
 #' # Pre-trained machine learning models with base param
-#' reco <- ctrml(base = base, hat = hat, obs = obs,
-#'               agg_order = m, agg_mat = agg_mat, approach = "lightgbm",
-#'               seed = 123, features = "rtw-full")
+#' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
+#'               agg_mat = agg_mat, approach = "lightgbm", features = "rtw-all")
 #' mdl2 <- extract_reconciled_ml(reco)
 #'
 #' # New base forecasts matrix
@@ -229,31 +222,15 @@ ctrml <- function(
   obs,
   agg_mat,
   agg_order,
-  features = "all",
+  features = "rtw-all",
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
   fit = NULL,
   tew = "sum",
   sntz = FALSE,
-  round = FALSE,
-  seed = NULL
+  round = FALSE
 ) {
-  features <- match.arg(
-    features,
-    c(
-      "hfbts",
-      "hfts",
-      "bts",
-      "str",
-      "str-hfbts",
-      "str-bts",
-      "all",
-      "rtw-full",
-      "rtw-comp"
-    )
-  )
-
   # Check if 'agg_order' is provided
   if (missing(agg_order)) {
     cli_abort(
@@ -333,7 +310,7 @@ ctrml <- function(
         sel_mat <- as(rep(id_bts, each = tmp$dim[["kt"]]), "sparseVector")
       },
       "str" = {
-        sel_mat <- strc_mat
+        sel_mat <- 1 * (sel_mat != 0)
       },
       "str-hfbts" = {
         sel_mat <- strc_mat +
@@ -359,7 +336,7 @@ ctrml <- function(
       "all" = {
         sel_mat <- 1
       },
-      "rtw-full" = {
+      "rtw-all" = {
         sel_mat <- 1
         block_sampling <- tmp$dim[["m"]]
       },
@@ -377,6 +354,9 @@ ctrml <- function(
         sel_mat <- 1 * t(sel_mat)
         sel_mat[1:tmp$dim[["n"]], ] <- 1
         block_sampling <- tmp$dim[["m"]]
+      },
+      {
+        cli_abort("Unknown {.arg features} option.", call = NULL)
       }
     )
     attr(sel_mat, "sel_method") <- features
@@ -413,7 +393,6 @@ ctrml <- function(
     sel_mat = sel_mat,
     approach = approach,
     params = params,
-    seed = seed,
     fit = fit,
     tuning = tuning,
     block_sampling = block_sampling

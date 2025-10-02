@@ -22,8 +22,8 @@ Useful links:
 
 Authors:
 \itemize{
-  \item Yangzhuoran Fin Yang \email{yangzhuoran.yang@maastrichtuniversity.nl} (\href{https://orcid.org/0000-0002-1232-8017}{ORCID})
-  \item Jeroen Rombouts \email{b00469813@essec.edu} (\href{https://orcid.org/0000-0003-2255-4875}{ORCID})
+  \item Yangzhuoran Fin Yang \email{yangyangzhuoran@gmail.com} (\href{https://orcid.org/0000-0002-1232-8017}{ORCID})
+  \item Jeroen Rombouts \email{rombouts@essec.edu} (\href{https://orcid.org/0000-0003-2255-4875}{ORCID})
   \item Ines Wilms \email{i.wilms@maastrichtuniversity.nl} (\href{https://orcid.org/0000-0003-3269-4601}{ORCID})
 }
 

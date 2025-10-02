@@ -14,8 +14,7 @@
 #'
 #' @usage
 #' csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
-#'       params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = TRUE,
-#'       seed = NULL)
+#'       params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = TRUE)
 #'
 #' @param base A (\eqn{h \times n}) numeric matrix or multivariate time series
 #'   (\code{mts} class) containing the base forecasts to be reconciled; \eqn{h}
@@ -90,11 +89,11 @@
 #' ##########################################################################
 #' # XGBoost Reconciliation (xgboost pkg)
 #' reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-#'               approach = "xgboost", seed = 123, features = "all")
+#'               approach = "xgboost", features = "all")
 #'
 #' # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
 #' reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-#'               approach = "xgboost", seed = 123, features = "all",
+#'               approach = "xgboost", features = "all",
 #'               params =  list(
 #'                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
 #'                 max_depth = 6, gamma = 0, subsample = 1,
@@ -104,18 +103,18 @@
 #'
 #' # LightGBM Reconciliation (lightgbm pkg)
 #' reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-#'               approach = "lightgbm", seed = 123, features = "all")
+#'               approach = "lightgbm", features = "all")
 #'
 #' # Random Forest Reconciliation (randomForest pkg)
 #' reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-#'               approach = "randomForest", seed = 123, features = "all")
+#'               approach = "randomForest", features = "all")
 #'
 #' # Using the mlr3 pkg:
 #' # With 'params = list(.key = mlr_learners)' we can specify different
 #' # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
 #' # "regr.xgboost" for XGBoost, and others.
 #' reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-#'               approach = "mlr3", seed = 123, features = "all",
+#'               approach = "mlr3", features = "all",
 #'               # choose mlr3 learner (here Random Forest via ranger)
 #'               params = list(.key = "regr.ranger"))
 #'
@@ -127,7 +126,7 @@
 #'   lgr::get_logger("bbotk")$set_threshold("warn")
 #' }
 #' reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-#'               approach = "mlr3", seed = 123, features = "all",
+#'               approach = "mlr3", features = "all",
 #'               params = list(
 #'                 .key = "regr.ranger",
 #'                 # number of features tried at each split
@@ -143,11 +142,11 @@
 #' ##########################################################################
 #' # Pre-trained machine learning models (e.g., omit the base param)
 #' mdl <- csrml(hat = hat, obs = obs, agg_mat = agg_mat,
-#'              approach = "xgboost", seed = 123, features = "all")
+#'              approach = "xgboost", features = "all")
 #'
 #' # Pre-trained machine learning models with base param
 #' reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
-#'               approach = "xgboost", seed = 123, features = "all")
+#'               approach = "xgboost", features = "all")
 #' mdl2 <- extract_reconciled_ml(reco)
 #'
 #' # New base forecasts matrix
@@ -168,11 +167,8 @@ csrml <- function(
   tuning = NULL,
   fit = NULL,
   sntz = FALSE,
-  round = FALSE,
-  seed = NULL
+  round = FALSE
 ) {
-  features <- match.arg(features, c("all", "bts", "str", "str-bts"))
-
   if (missing(agg_mat)) {
     cli_abort(
       "Argument {.arg agg_mat} is missing, with no default.",
@@ -216,6 +212,9 @@ csrml <- function(
       },
       "all" = {
         sel_mat <- Matrix(1, nrow = n, ncol = nb, sparse = TRUE)
+      },
+      {
+        cli_abort("Unknown {.arg features} option.", call = NULL)
       }
     )
     attr(sel_mat, "sel_method") <- features
@@ -236,101 +235,6 @@ csrml <- function(
     }
   }
 
-  # if(is.null(fit)){
-  #   if(missing(obs)){
-  #     cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
-  #   }else if(NCOL(obs) != nb){
-  #     cli_abort("Incorrect {.arg obs} columns dimension.", call = NULL)
-  #   }
-  #
-  #   if(missing(hat)){
-  #     cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
-  #   }
-  #
-  #   if(is.list(hat) && is.list(base)){
-  #     p <- length(base)
-  #
-  #     ina <- sapply(base, function(bmat){
-  #       is.na(colSums(bmat))
-  #     })
-  #
-  #     hat <- lapply(hat, rbind)
-  #     hat <- do.call(cbind, hat)
-  #
-  #     base <- lapply(base, rbind)
-  #     base <- do.call(cbind, base)
-  #
-  #     if(NCOL(hat) != n*p){
-  #       cli_abort("Incorrect {.arg hat} elements' columns dimension.", call = NULL)
-  #     }
-  #
-  #     if(NCOL(base) != n*p){
-  #       cli_abort("Incorrect {.arg base} elements' columns dimension.", call = NULL)
-  #     }
-  #
-  #     hat <- hat[, !as.vector(ina), drop = FALSE]
-  #     base <- base[, !as.vector(ina), drop = FALSE]
-  #
-  #     strc_mat <- do.call(rbind, rep(list(strc_mat), p))[!as.vector(ina), , drop = FALSE]
-  #     id_bts <- rep(id_bts, p)[!as.vector(ina)]
-  #
-  #   }else if(!is.list(hat) && !is.list(base)){
-  #     if(NCOL(hat) != n){
-  #       cli_abort("Incorrect {.arg hat} columns dimension.", call = NULL)
-  #     }
-  #
-  #     if(NCOL(base) != n){
-  #       cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
-  #     }
-  #   }else{
-  #     cli_abort("Incorrect {.arg base} or {.arg hat} arguments.", call = NULL)
-  #   }
-  #
-  #   switch(features,
-  #          "bts" = {
-  #            sel_mat <- Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
-  #          },
-  #          "hier" = {
-  #            sel_mat <- strc_mat
-  #          },
-  #          "hier-bts" = {
-  #            sel_mat <- strc_mat + Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
-  #            sel_mat[sel_mat != 0] <- 1
-  #          },
-  #          "all" = {
-  #            sel_mat <- Matrix(1, nrow = NCOL(base), ncol = nb, sparse = TRUE)
-  #          }
-  #   )
-  #   attr(sel_mat, "sel_method") <- features
-  # }else{
-  #   hat <- NULL
-  #   obs <- NULL
-  #   sel_mat <- NULL
-  #
-  #   if(is.list(base)){
-  #     p <- length(base)
-  #
-  #     ina <- sapply(base, function(bmat){
-  #       is.na(colSums(bmat))
-  #     })
-  #
-  #     base <- lapply(base, rbind)
-  #     base <- do.call(cbind, base)
-  #
-  #     if(NCOL(base) != n*p){
-  #       cli_abort("Incorrect {.arg base} elements' columns dimension.", call = NULL)
-  #     }
-  #
-  #     base <- base[, !as.vector(ina), drop = FALSE]
-  #
-  #     strc_mat <- do.call(rbind, rep(list(strc_mat), p))[!as.vector(ina), , drop = FALSE]
-  #     id_bts <- rep(id_bts, p)[!as.vector(ina)]
-  #
-  #   }else if(NCOL(base) != n){
-  #     cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
-  #   }
-  # }
-
   reco_mat <- rml(
     base = base,
     hat = hat,
@@ -338,7 +242,6 @@ csrml <- function(
     sel_mat = sel_mat,
     approach = approach,
     params = params,
-    seed = seed,
     fit = fit,
     tuning = tuning
   )

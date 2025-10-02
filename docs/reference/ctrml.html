@@ -71,9 +71,9 @@ described by Girolimetto and Di Fonzo (2024).</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">ctrml</span><span class="op">(</span><span class="va">base</span>, <span class="va">hat</span>, <span class="va">obs</span>, <span class="va">agg_mat</span>, <span class="va">agg_order</span>, features <span class="op">=</span> <span class="st">"all"</span>,</span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">ctrml</span><span class="op">(</span><span class="va">base</span>, <span class="va">hat</span>, <span class="va">obs</span>, <span class="va">agg_mat</span>, <span class="va">agg_order</span>, features <span class="op">=</span> <span class="st">"rtw-all"</span>,</span>
 <span>      approach <span class="op">=</span> <span class="st">"randomForest"</span>, params <span class="op">=</span> <span class="cn">NULL</span>, tuning <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>      fit <span class="op">=</span> <span class="cn">NULL</span>, tew <span class="op">=</span> <span class="st">"sum"</span>, sntz <span class="op">=</span> <span class="cn">FALSE</span>, round <span class="op">=</span> <span class="cn">TRUE</span>, seed <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+<span>      fit <span class="op">=</span> <span class="cn">NULL</span>, tew <span class="op">=</span> <span class="st">"sum"</span>, sntz <span class="op">=</span> <span class="cn">FALSE</span>, round <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -121,9 +121,8 @@ subset of \(p\) factors of \(m\).</p></dd>
 
 <dt id="arg-features">features<a class="anchor" aria-label="anchor" href="#arg-features"></a></dt>
 <dd><p>Character string specifying which features are used for model
-training. Options include "<code>hfbts</code>", "<code>hfts</code>", "<code>bts</code>",
-"<code>str</code>", "<code>str-hfbts</code>", "<code>str-bts</code>", "<code>all</code>"
-(<em>default</em>), "<code>rtw-full</code>", and "<code>rtw-comp</code>".</p></dd>
+training. Options include "<code>rtw-all</code>", and "<code>rtw-comp</code>"
+(<em>default</em>).</p></dd>
 
 
 <dt id="arg-approach">approach<a class="anchor" aria-label="anchor" href="#arg-approach"></a></dt>
@@ -145,7 +144,7 @@ package. The learner must be specified via <code>params</code>, e.g.
 ML approach These may include algorithm-specific hyperparameters for
 <span class="pkg">randomForest</span>, <span class="pkg">xgboost</span>, <span class="pkg">lightgbm</span>, or learner options for
 <span class="pkg">mlr3</span>. When <code>approach = "mlr3"</code>, the list must include
-<code>.key</code> to select the learner (e.g. <code>.key = "regr.xgboost"</code>,
+<code>.key</code> to select the learner (e.g. <code>.key = "regr.ranger"</code>,
 <em>default</em>).</p></dd>
 
 
@@ -179,10 +178,6 @@ Girolimetto, 2023). <em>Default</em> is <code>FALSE</code>.</p></dd>
 <dd><p>Logical. If <code>TRUE</code>, reconciled forecasts are rounded to
 integer values and coherence is ensured via a bottom-up adjustment.
 <em>Default</em> is <code>FALSE</code>.</p></dd>
-
-
-<dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
-<dd><p>Optional integer seed for reproducibility.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -262,39 +257,36 @@ reconciliation at digital platforms with machine learning.
 <span class="r-in"><span><span class="co">##########################################################################</span></span></span>
 <span class="r-in"><span><span class="co"># XGBoost Reconciliation (xgboost pkg)</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">ctrml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"xgboost"</span>, seed <span class="op">=</span> <span class="fl">123</span>,</span></span>
-<span class="r-in"><span>              features <span class="op">=</span> <span class="st">"rtw-full"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"xgboost"</span>, features <span class="op">=</span> <span class="st">"rtw-all"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># XGBoost Reconciliation with Tweedie loss function (xgboost pkg)</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">ctrml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"xgboost"</span>, seed <span class="op">=</span> <span class="fl">123</span>,</span></span>
+<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"xgboost"</span>, features <span class="op">=</span> <span class="st">"rtw-all"</span>,</span></span>
 <span class="r-in"><span>              params <span class="op">=</span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>                eta <span class="op">=</span> <span class="fl">0.3</span>, colsample_bytree <span class="op">=</span> <span class="fl">1</span>, min_child_weight <span class="op">=</span> <span class="fl">1</span>,</span></span>
 <span class="r-in"><span>                max_depth <span class="op">=</span> <span class="fl">6</span>, gamma <span class="op">=</span> <span class="fl">0</span>, subsample <span class="op">=</span> <span class="fl">1</span>,</span></span>
 <span class="r-in"><span>                objective <span class="op">=</span> <span class="st">"reg:tweedie"</span>, <span class="co"># Tweedie regression objective</span></span></span>
 <span class="r-in"><span>                tweedie_variance_power <span class="op">=</span> <span class="fl">1.5</span> <span class="co"># Tweedie power parameter</span></span></span>
-<span class="r-in"><span>              <span class="op">)</span>,</span></span>
-<span class="r-in"><span>              features <span class="op">=</span> <span class="st">"rtw-full"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              <span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># LightGBM Reconciliation (lightgbm pkg)</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">ctrml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"lightgbm"</span>, seed <span class="op">=</span> <span class="fl">123</span>,</span></span>
-<span class="r-in"><span>              features <span class="op">=</span> <span class="st">"rtw-full"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"lightgbm"</span>,</span></span>
+<span class="r-in"><span>              features <span class="op">=</span> <span class="st">"rtw-all"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Random Forest Reconciliation (randomForest pkg)</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">ctrml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"randomForest"</span>, seed <span class="op">=</span> <span class="fl">123</span>,</span></span>
-<span class="r-in"><span>              features <span class="op">=</span> <span class="st">"rtw-full"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"randomForest"</span>,</span></span>
+<span class="r-in"><span>              features <span class="op">=</span> <span class="st">"rtw-all"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Using the mlr3 pkg:</span></span></span>
 <span class="r-in"><span><span class="co"># With 'params = list(.key = mlr_learners)' we can specify different</span></span></span>
 <span class="r-in"><span><span class="co"># mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,</span></span></span>
 <span class="r-in"><span><span class="co"># "regr.xgboost" for XGBoost, and others.</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">ctrml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"mlr3"</span>, seed <span class="op">=</span> <span class="fl">123</span>,</span></span>
+<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"mlr3"</span>, features <span class="op">=</span> <span class="st">"rtw-all"</span>,</span></span>
 <span class="r-in"><span>              <span class="co"># choose mlr3 learner (here Random Forest via ranger)</span></span></span>
-<span class="r-in"><span>              params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>.key <span class="op">=</span> <span class="st">"regr.ranger"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>              features <span class="op">=</span> <span class="st">"rtw-full"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>.key <span class="op">=</span> <span class="st">"regr.ranger"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span><span class="co"># With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].</span></span></span>
 <span class="r-in"><span><span class="co"># We can reduce excessive logging by calling:</span></span></span>
@@ -303,7 +295,7 @@ reconciliation at digital platforms with machine learning.
 <span class="r-in"><span>  <span class="fu">lgr</span><span class="fu">::</span><span class="fu"><a href="https://s-fleck.github.io/lgr/reference/get_logger.html" class="external-link">get_logger</a></span><span class="op">(</span><span class="st">"bbotk"</span><span class="op">)</span><span class="op">$</span><span class="fu">set_threshold</span><span class="op">(</span><span class="st">"warn"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">ctrml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"mlr3"</span>, seed <span class="op">=</span> <span class="fl">123</span>,</span></span>
+<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"mlr3"</span>, features <span class="op">=</span> <span class="st">"rtw-all"</span>,</span></span>
 <span class="r-in"><span>              params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>                .key <span class="op">=</span> <span class="st">"regr.ranger"</span>,</span></span>
 <span class="r-in"><span>                <span class="co"># number of features tried at each split</span></span></span>
@@ -312,8 +304,7 @@ reconciliation at digital platforms with machine learning.
 <span class="r-in"><span>              tuning <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>                <span class="co"># stop after 10 evaluations</span></span></span>
 <span class="r-in"><span>                terminator <span class="op">=</span> <span class="fu">mlr3tuning</span><span class="fu">::</span><span class="fu"><a href="https://bbotk.mlr-org.com/reference/trm.html" class="external-link">trm</a></span><span class="op">(</span><span class="st">"evals"</span>, n_evals <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
-<span class="r-in"><span>              <span class="op">)</span>,</span></span>
-<span class="r-in"><span>              features <span class="op">=</span> <span class="st">"rtw-full"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              <span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span><span class="co">##########################################################################</span></span></span>
 <span class="r-in"><span><span class="co"># Usage with pre-trained models</span></span></span>
@@ -321,12 +312,11 @@ reconciliation at digital platforms with machine learning.
 <span class="r-in"><span><span class="co"># Pre-trained machine learning models (e.g., omit the base param)</span></span></span>
 <span class="r-in"><span><span class="va">mdl</span> <span class="op">&lt;-</span> <span class="fu">ctrml</span><span class="op">(</span>hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>,</span></span>
 <span class="r-in"><span>             agg_order <span class="op">=</span> <span class="va">m</span>, agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"lightgbm"</span>,</span></span>
-<span class="r-in"><span>             seed <span class="op">=</span> <span class="fl">123</span>, features <span class="op">=</span> <span class="st">"rtw-full"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>             features <span class="op">=</span> <span class="st">"rtw-all"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Pre-trained machine learning models with base param</span></span></span>
-<span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">ctrml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>,</span></span>
-<span class="r-in"><span>              agg_order <span class="op">=</span> <span class="va">m</span>, agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"lightgbm"</span>,</span></span>
-<span class="r-in"><span>              seed <span class="op">=</span> <span class="fl">123</span>, features <span class="op">=</span> <span class="st">"rtw-full"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">ctrml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
+<span class="r-in"><span>              agg_mat <span class="op">=</span> <span class="va">agg_mat</span>, approach <span class="op">=</span> <span class="st">"lightgbm"</span>, features <span class="op">=</span> <span class="st">"rtw-all"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">mdl2</span> <span class="op">&lt;-</span> <span class="fu"><a href="extract_reconciled_ml.html">extract_reconciled_ml</a></span><span class="op">(</span><span class="va">reco</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># New base forecasts matrix</span></span></span>

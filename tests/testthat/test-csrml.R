@@ -1,5 +1,6 @@
 # test cross-sectional reconciliation
 if (require(testthat)) {
+  set.seed(123)
   # agg_mat: simple aggregation matrix, A = B + C
   agg_mat <- t(c(1, 1))
   dimnames(agg_mat) <- list("A", c("B", "C"))
@@ -46,7 +47,6 @@ if (require(testthat)) {
           base = base,
           agg_mat = agg_mat,
           approach = i,
-          seed = 123,
           features = j
         ))
       }
@@ -59,7 +59,6 @@ if (require(testthat)) {
       obs = obs,
       agg_mat = agg_mat,
       approach = "lightgbm",
-      seed = 123,
       features = "all"
     )
     r1 <- csrml(
@@ -68,7 +67,6 @@ if (require(testthat)) {
       base = base,
       agg_mat = agg_mat,
       approach = "lightgbm",
-      seed = 123,
       features = "all"
     )
     mdl2 <- extract_reconciled_ml(r1)
@@ -90,7 +88,6 @@ if (require(testthat)) {
       obs = obs,
       agg_mat = agg_mat,
       approach = "lightgbm",
-      seed = 123,
       features = "all"
     )
     expect_error(csrml(fit = mdl, agg_order = m))

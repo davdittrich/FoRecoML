@@ -46,14 +46,7 @@ if (require(testthat)) {
   test_that("Approach and features", {
     for (i in c("xgboost", "mlr3", "lightgbm", "randomForest")) {
       for (j in c(
-        "hfbts",
-        "hfts",
-        "bts",
-        "str",
-        "str-hfbts",
-        "str-bts",
-        "all",
-        "rtw-full",
+        "rtw-all",
         "rtw-comp"
       )) {
         expect_no_error(ctrml(
@@ -63,7 +56,6 @@ if (require(testthat)) {
           agg_order = m,
           agg_mat = agg_mat,
           approach = i,
-          seed = 123,
           features = j
         ))
       }
@@ -77,8 +69,7 @@ if (require(testthat)) {
       agg_order = m,
       agg_mat = agg_mat,
       approach = "lightgbm",
-      seed = 123,
-      features = "rtw-full"
+      features = "rtw-all"
     )
     r1 <- ctrml(
       hat = hat,
@@ -87,8 +78,7 @@ if (require(testthat)) {
       agg_order = m,
       agg_mat = agg_mat,
       approach = "lightgbm",
-      seed = 123,
-      features = "rtw-full"
+      features = "rtw-all"
     )
     mdl2 <- extract_reconciled_ml(r1)
 
@@ -111,8 +101,7 @@ if (require(testthat)) {
       agg_order = m,
       agg_mat = agg_mat,
       approach = "lightgbm",
-      seed = 123,
-      features = "rtw-full"
+      features = "rtw-all"
     )
     expect_error(ctrml(fit = mdl, agg_order = m, agg_mat = agg_mat))
   })
