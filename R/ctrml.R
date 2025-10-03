@@ -415,7 +415,7 @@ ctrml <- function(
       tew = tew
     )
 
-    attr(reco_mat, "FoReco") <- list2env(list(
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
       fit = fit,
       framework = "Cross-temporal",
       forecast_horizon = h,

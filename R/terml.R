@@ -291,7 +291,7 @@ terml <- function(
       tew = tew
     )
 
-    attr(reco_mat, "FoReco") <- list2env(list(
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
       fit = fit,
       framework = "Temporal",
       forecast_horizon = h,

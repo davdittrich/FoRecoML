@@ -252,7 +252,7 @@ csrml <- function(
     attr(reco_mat, "fit") <- NULL
     reco_mat <- csbu(reco_mat, agg_mat = agg_mat, round = round, sntz = sntz)
 
-    attr(reco_mat, "FoReco") <- list2env(list(
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
       fit = fit,
       framework = "Cross-sectional",
       forecast_horizon = NROW(reco_mat),
