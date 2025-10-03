@@ -313,7 +313,8 @@ ctrml <- function(
         sel_mat <- 1 * (sel_mat != 0)
       },
       "str-hfbts" = {
-        sel_mat <- strc_mat +
+        sel_mat <- 1 * (sel_mat != 0)
+        sel_mat <- sel_mat +
           Matrix(
             rep(id_hfbts, tmp$dim[["nb"]] * tmp$dim[["m"]]),
             ncol = tmp$dim[["nb"]] * tmp$dim[["m"]],
@@ -322,7 +323,8 @@ ctrml <- function(
         sel_mat[sel_mat != 0] <- 1
       },
       "str-bts" = {
-        sel_mat <- strc_mat +
+        sel_mat <- 1 * (sel_mat != 0)
+        sel_mat <- sel_mat +
           Matrix(
             rep(
               rep(id_bts, each = tmp$dim[["kt"]]),
