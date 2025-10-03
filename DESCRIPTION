@@ -32,8 +32,9 @@ Authors@R: c(
       comment = c(ORCID = "0000-0003-3269-4601")
     )
   )
-Description: More about what it does (maybe more than one line).
-    Continuation lines should be indented.
+Description: Nonlinear forecast reconciliation with machine learning in cross-sectional 
+    (Spiliotis et al. 2021 <doi:10.1016/j.asoc.2021.107756>), temporal, and 
+    cross-temporal (Rombouts et al. 2024 <doi:10.1016/j.ijforecast.2024.05.008>) frameworks.
 Depends: R (>= 3.4), Matrix, FoReco
 Imports: stats, cli, methods, randomForest, lightgbm, xgboost, 
     mlr3, mlr3tuning, mlr3learners, paradox
