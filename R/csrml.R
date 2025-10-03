@@ -12,9 +12,6 @@
 #' constrained time series it can be applied within the broader reconciliation
 #' framework described by Girolimetto and Di Fonzo (2024).
 #'
-#' @usage
-#' csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
-#'       params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = TRUE)
 #'
 #' @param base A (\eqn{h \times n}) numeric matrix or multivariate time series
 #'   (\code{mts} class) containing the base forecasts to be reconciled; \eqn{h}
@@ -118,7 +115,7 @@
 #'               # choose mlr3 learner (here Random Forest via ranger)
 #'               params = list(.key = "regr.ranger"))
 #'
-#' \dontrun{
+#' \donttest{
 #' # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,2].
 #' # We can reduce excessive logging by calling:
 #' if (requireNamespace("lgr", quietly = TRUE)) {

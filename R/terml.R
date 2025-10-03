@@ -7,10 +7,6 @@
 #' across both temporal dimensions to high-frequency series. Fully coherent
 #' forecasts are then derived by temporal bottom-up.
 #'
-#' @usage
-#' terml(base, hat, obs, agg_order, features = "all", approach = "randomForest",
-#'       params = NULL, tuning = NULL, fit = NULL, tew = "sum", sntz = FALSE,
-#'       round = TRUE)
 #'
 #' @param base A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
 #'   base forecasts to be reconciled, ordered from lowest to highest frequency;
@@ -111,7 +107,7 @@
 #'               # choose mlr3 learner (here Random Forest via ranger)
 #'               params = list(.key = "regr.ranger"))
 #'
-#' \dontrun{
+#' \donttest{
 #' # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
 #' # We can reduce excessive logging by calling:
 #' if(requireNamespace("lgr", quietly = TRUE)){

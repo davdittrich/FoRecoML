@@ -4,8 +4,19 @@
 \alias{csrml}
 \title{Cross-sectional Reconciliation with Machine Learning}
 \usage{
-csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
-      params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = TRUE)
+csrml(
+  base,
+  hat,
+  obs,
+  agg_mat,
+  features = "all",
+  approach = "randomForest",
+  params = NULL,
+  tuning = NULL,
+  fit = NULL,
+  sntz = FALSE,
+  round = FALSE
+)
 }
 \arguments{
 \item{base}{A (\eqn{h \times n}) numeric matrix or multivariate time series
@@ -153,7 +164,7 @@ reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
               # choose mlr3 learner (here Random Forest via ranger)
               params = list(.key = "regr.ranger"))
 
-\dontrun{
+\donttest{
 # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,2].
 # We can reduce excessive logging by calling:
 if (requireNamespace("lgr", quietly = TRUE)) {

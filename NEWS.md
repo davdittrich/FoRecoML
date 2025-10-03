@@ -1,4 +1,3 @@
-# FoRecoML 0.0.1
+# FoRecoML (development version)
 
 * Initial CRAN submission.
-* ...

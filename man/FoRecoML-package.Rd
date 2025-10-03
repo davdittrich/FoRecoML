@@ -6,7 +6,7 @@
 \alias{FoRecoML-package}
 \title{FoRecoML: Forecast Reconciliation with Machine Learning}
 \description{
-More about what it does (maybe more than one line). Continuation lines should be indented.
+Nonlinear forecast reconciliation with machine learning in cross-sectional (Spiliotis et al. 2021 \doi{10.1016/j.asoc.2021.107756}), temporal, and cross-temporal (Rombouts et al. 2024 \doi{10.1016/j.ijforecast.2024.05.008}) frameworks.
 }
 \seealso{
 Useful links:

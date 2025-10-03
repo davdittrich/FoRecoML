@@ -11,10 +11,6 @@
 #' series it can be applied within the broader reconciliation framework
 #' described by Girolimetto and Di Fonzo (2024).
 #'
-#' @usage
-#' ctrml(base, hat, obs, agg_mat, agg_order, features = "rtw-all",
-#'       approach = "randomForest", params = NULL, tuning = NULL,
-#'       fit = NULL, tew = "sum", sntz = FALSE, round = TRUE)
 #'
 #' @param base A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
 #'   forecasts to be reconciled; \eqn{n} is the total number of variables,
@@ -174,7 +170,7 @@
 #'               agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
 #'               # choose mlr3 learner (here Random Forest via ranger)
 #'               params = list(.key = "regr.ranger"))
-#' \dontrun{
+#' \donttest{
 #' # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
 #' # We can reduce excessive logging by calling:
 #' if(requireNamespace("lgr", quietly = TRUE)){

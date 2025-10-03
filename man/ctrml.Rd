@@ -4,9 +4,21 @@
 \alias{ctrml}
 \title{Cross-temporal Reconciliation with Machine Learning}
 \usage{
-ctrml(base, hat, obs, agg_mat, agg_order, features = "rtw-all",
-      approach = "randomForest", params = NULL, tuning = NULL,
-      fit = NULL, tew = "sum", sntz = FALSE, round = TRUE)
+ctrml(
+  base,
+  hat,
+  obs,
+  agg_mat,
+  agg_order,
+  features = "rtw-all",
+  approach = "randomForest",
+  params = NULL,
+  tuning = NULL,
+  fit = NULL,
+  tew = "sum",
+  sntz = FALSE,
+  round = FALSE
+)
 }
 \arguments{
 \item{base}{A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
@@ -186,7 +198,7 @@ reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
               agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
               # choose mlr3 learner (here Random Forest via ranger)
               params = list(.key = "regr.ranger"))
-\dontrun{
+\donttest{
 # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
 # We can reduce excessive logging by calling:
 if(requireNamespace("lgr", quietly = TRUE)){
