@@ -5,9 +5,13 @@
       fontURL: "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/output/chtml/fonts/woff-v2"
     }
   };
-</script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Extract the reconciled model from a reconciliation result — extract_reconciled_ml"><meta name="description" content="Safely extracts the fitted reconciled model(s) from a reconciliation
-function's output (e.g., csrml, terml and ctrml)."><meta property="og:description" content="Safely extracts the fitted reconciled model(s) from a reconciliation
-function's output (e.g., csrml, terml and ctrml)."><meta property="og:image" content="https://danigiro.github.io/FoRecoML/logo.svg"></head><body>
+</script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Extract the reconciled model from a reconciliation result — extract_reconciled_ml"><meta name="description" content="Extract the fitted reconciled model(s) from a reconciliation
+function's output (e.g., csrml, terml and ctrml).
+The model can be reused for forecast reconciliation in the
+reconciliation functions."><meta property="og:description" content="Extract the fitted reconciled model(s) from a reconciliation
+function's output (e.g., csrml, terml and ctrml).
+The model can be reused for forecast reconciliation in the
+reconciliation functions."><meta property="og:image" content="https://danigiro.github.io/FoRecoML/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -41,8 +45,10 @@ function's output (e.g., csrml, terml and ctrml)."><meta property="og:image" con
     </div>
 
     <div class="ref-description section level2">
-    <p>Safely extracts the fitted reconciled model(s) from a reconciliation
-function's output (e.g., <a href="csrml.html">csrml</a>, <a href="terml.html">terml</a> and <a href="ctrml.html">ctrml</a>).</p>
+    <p>Extract the fitted reconciled model(s) from a reconciliation
+function's output (e.g., <a href="csrml.html">csrml</a>, <a href="terml.html">terml</a> and <a href="ctrml.html">ctrml</a>).
+The model can be reused for forecast reconciliation in the
+reconciliation functions.</p>
     </div>
 
     <div class="section level2">
@@ -77,18 +83,78 @@ matrix or indices).</p></dd>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="co"># Suppose `reco` is the result of a reconciliation call:</span></span></span>
-<span class="r-in"><span><span class="co"># reco &lt;- ctrml(...)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># agg_mat: simple aggregation matrix, A = B + C</span></span></span>
+<span class="r-in"><span><span class="va">agg_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>,<span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/dimnames.html" class="external-link">dimnames</a></span><span class="op">(</span><span class="va">agg_mat</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="st">"A"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"B"</span>, <span class="st">"C"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># N_hat: dimension for the most aggregated training set</span></span></span>
+<span class="r-in"><span><span class="va">N_hat</span> <span class="op">&lt;-</span> <span class="fl">100</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># ts_mean: mean for the Normal draws used to simulate data</span></span></span>
+<span class="r-in"><span><span class="va">ts_mean</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">20</span>, <span class="fl">10</span>, <span class="fl">10</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># hat: a training (base forecasts) feautures matrix</span></span></span>
+<span class="r-in"><span><span class="va">hat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">ts_mean</span><span class="op">)</span><span class="op">*</span><span class="va">N_hat</span>, mean <span class="op">=</span> <span class="va">ts_mean</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  <span class="va">N_hat</span>, byrow <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">hat</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/dimnames.html" class="external-link">dimnames</a></span><span class="op">(</span><span class="va">agg_mat</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># obs: (observed) values for bottom-level series (B, C)</span></span></span>
+<span class="r-in"><span><span class="va">obs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">ts_mean</span><span class="op">[</span><span class="op">-</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span><span class="op">*</span><span class="va">N_hat</span>, mean <span class="op">=</span> <span class="va">ts_mean</span><span class="op">[</span><span class="op">-</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  <span class="va">N_hat</span>, byrow <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">obs</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">agg_mat</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># h: base forecast horizon</span></span></span>
+<span class="r-in"><span><span class="va">h</span> <span class="op">&lt;-</span> <span class="fl">2</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># base: base forecasts matrix</span></span></span>
+<span class="r-in"><span><span class="va">base</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">ts_mean</span><span class="op">)</span><span class="op">*</span><span class="va">h</span>, mean <span class="op">=</span> <span class="va">ts_mean</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  <span class="va">h</span>, byrow <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">base</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/dimnames.html" class="external-link">dimnames</a></span><span class="op">(</span><span class="va">agg_mat</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># `reco` is the result of a reconciliation call:</span></span></span>
+<span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu"><a href="csrml.html">csrml</a></span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_mat <span class="op">=</span> <span class="va">agg_mat</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">mdl</span> <span class="op">&lt;-</span> <span class="fu">extract_reconciled_ml</span><span class="op">(</span><span class="va">reco</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="kw">if</span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">mdl</span><span class="op">)</span><span class="op">)</span><span class="op">{</span></span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">mdl</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span></span></span>
+<span class="r-in"><span><span class="va">mdl</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $sel_mat</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 x 2 sparse Matrix of class "dgCMatrix"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>         </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,] 1 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [2,] 1 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [3,] 1 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $fit</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $fit[[1]]</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Call:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  randomForest(x = X, y = y, ntree = ntree, mtry = mtry, nodesize = nodesize,      importance = FALSE) </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                Type of random forest: regression</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                      Number of trees: 500</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> No. of variables tried at each split: 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>           Mean of squared residuals: 1.182886</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                     % Var explained: -20.47</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $fit[[2]]</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Call:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  randomForest(x = X, y = y, ntree = ntree, mtry = mtry, nodesize = nodesize,      importance = FALSE) </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                Type of random forest: regression</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                      Number of trees: 500</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> No. of variables tried at each split: 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>           Mean of squared residuals: 1.062128</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                     % Var explained: -12.27</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $approach</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "randomForest"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> attr(,"class")</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "rml_fit"</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># If already an rml_fit:</span></span></span>
-<span class="r-in"><span><span class="va">mdl2</span> <span class="op">&lt;-</span> <span class="fu">extract_reconciled_ml</span><span class="op">(</span><span class="va">mdl</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

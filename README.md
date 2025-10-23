@@ -3,8 +3,6 @@
 
 # FoRecoML <img src="man/figures/logo.svg" alt="logo" align="right" width="150" style="border: none; float: right;"/>
 
-<!-- badges: start -->
-
 [![R-CMD-check](https://github.com/danigiro/FoRecoML/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/danigiro/FoRecoML/actions/workflows/R-CMD-check.yaml)
 [![CRAN
 status](https://www.r-pkg.org/badges/version/FoRecoML)](https://CRAN.R-project.org/package=FoRecoML)
@@ -12,7 +10,6 @@ status](https://www.r-pkg.org/badges/version/FoRecoML)](https://CRAN.R-project.o
 version](https://img.shields.io/badge/devel%20version-0.0.0.9000-blue.svg)](https://github.com/danigiro/FoRecoML)
 [![License:
 GPL-3](https://img.shields.io/badge/license-GPL--3-forestgreen.svg)](https://cran.r-project.org/web/licenses/GPL-3)
-<!-- badges: end -->
 
 **Fo**recast **Reco**nciliation is a post-forecasting process designed
 to improve accuracy and align forecasts within systems of linearly
