@@ -54,7 +54,7 @@ if (require(testthat)) {
   })
 
   test_that("Two step", {
-    mdl <- csrml(
+    mdl <- csrml_fit(
       hat = hat,
       obs = obs,
       agg_mat = agg_mat,
@@ -80,10 +80,13 @@ if (require(testthat)) {
   })
 
   test_that("Errors", {
+    expect_error(csrml_fit(hat = hat, obs = obs))
+    expect_error(csrml_fit(hat = hat, agg_mat = agg_mat))
+    expect_error(csrml_fit(obs = obs, agg_mat = agg_mat))
     expect_error(csrml(hat = hat, obs = obs))
     expect_error(csrml(hat = hat, agg_mat = agg_mat))
     expect_error(csrml(obs = obs, agg_mat = agg_mat))
-    mdl <- csrml(
+    mdl <- csrml_fit(
       hat = hat,
       obs = obs,
       agg_mat = agg_mat,

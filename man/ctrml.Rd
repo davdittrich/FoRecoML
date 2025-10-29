@@ -2,23 +2,17 @@
 % Please edit documentation in R/ctrml.R
 \name{ctrml}
 \alias{ctrml}
+\alias{ctrml_fit}
 \title{Cross-temporal Reconciliation with Machine Learning}
 \usage{
-ctrml(
-  base,
-  hat,
-  obs,
-  agg_mat,
-  agg_order,
-  features = "rtw-all",
-  approach = "randomForest",
-  params = NULL,
-  tuning = NULL,
-  fit = NULL,
-  tew = "sum",
-  sntz = FALSE,
-  round = FALSE
-)
+# Reconciled forecasts
+ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "rtw-all",
+      approach = "randomForest", params = NULL, tuning = NULL,
+      fit = NULL, sntz = FALSE, round = FALSE)
+
+# Pre-trained reconciled ML models
+ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "rtw-all",
+          approach = "randomForest", params = NULL, tuning = NULL)
 }
 \arguments{
 \item{base}{A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
@@ -50,9 +44,14 @@ cross-sectional aggregation matrix. It maps the \eqn{n_b} bottom-level
 (max. order of temporal aggregation, \eqn{m}), or a vector representing a
 subset of \eqn{p} factors of \eqn{m}.}
 
+\item{tew}{A string specifying the type of temporal aggregation. Options
+include: "\code{sum}" (simple summation, \emph{default}), "\code{avg}"
+(average), "\code{first}" (first value of the period), and "\code{last}"
+(last value of the period).}
+
 \item{features}{Character string specifying which features are used for model
-training. Options include "\code{rtw-all}", and "\code{rtw-comp}"
-(\emph{default}).}
+training. Options include "\code{rtw-all}" (see Rombouts et al. 2025), and
+"\code{rtw-comp}" (see Rombouts et al. 2025, \emph{default}).}
 
 \item{approach}{Character string specifying the machine learning method used
 for reconciliation. Options are:
@@ -84,11 +83,6 @@ through \code{params}.}
 \link{extract_reconciled_ml}). If supplied, training data (\code{hat},
 \code{obs}) are not required.}
 
-\item{tew}{A string specifying the type of temporal aggregation. Options
-include: "\code{sum}" (simple summation, \emph{default}), "\code{avg}"
-(average), "\code{first}" (first value of the period), and "\code{last}"
-(last value of the period).}
-
 \item{sntz}{Logical. If \code{TRUE}, enforces non-negativity on reconciled
 forecasts using the heuristic "set-negative-to-zero" (Di Fonzo and
 Girolimetto, 2023). \emph{Default} is \code{FALSE}.}
@@ -98,12 +92,17 @@ integer values and coherence is ensured via a bottom-up adjustment.
 \emph{Default} is \code{FALSE}.}
 }
 \value{
-If \code{base} is provided, returns a cross-temporal reconciled
-forecast matrix with the same dimensions, along with attributes containing
-the fitted model and reconciliation settings (see, \link[FoReco:recoinfo]{FoReco::recoinfo} and
-\link{extract_reconciled_ml}). If only models are trained (omitting
-\code{base}), returns a fitted object that can be reused for reconciliation
-on new base forecasts (see, \link{extract_reconciled_ml}).
+\itemize{
+\item \link{ctrml} returns a cross-temporal reconciled forecast matrix with the
+same dimensions, along with attributes containing the fitted model and
+reconciliation settings (see, \link[FoReco:recoinfo]{FoReco::recoinfo} and
+\link{extract_reconciled_ml}).
+}
+
+\itemize{
+\item \link{ctrml_fit} returns a fitted object that can be reused for
+reconciliation on new base forecasts.
+}
 }
 \description{
 This function performs machine-learning–based cross-temporal forecast
@@ -201,10 +200,10 @@ reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
 \donttest{
 # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
 # We can reduce excessive logging by calling:
-if(requireNamespace("lgr", quietly = TRUE)){
-  lgr::get_logger("mlr3")$set_threshold("warn")
-  lgr::get_logger("bbotk")$set_threshold("warn")
-}
+# if(requireNamespace("lgr", quietly = TRUE)){
+#   lgr::get_logger("mlr3")$set_threshold("warn")
+#   lgr::get_logger("bbotk")$set_threshold("warn")
+# }
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
               agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
               params = list(
@@ -221,13 +220,12 @@ reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
 # Usage with pre-trained models
 ##########################################################################
 # Pre-trained machine learning models (e.g., omit the base param)
-mdl <- ctrml(hat = hat, obs = obs,
-             agg_order = m, agg_mat = agg_mat, approach = "lightgbm",
-             features = "rtw-all")
+mdl <- ctrml_fit(hat = hat, obs = obs, agg_order = m, agg_mat = agg_mat,
+                 approach = "xgboost", features = "rtw-all")
 
 # Pre-trained machine learning models with base param
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "lightgbm", features = "rtw-all")
+              agg_mat = agg_mat, approach = "xgboost", features = "rtw-all")
 mdl2 <- extract_reconciled_ml(reco)
 
 # New base forecasts matrix

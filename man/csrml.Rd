@@ -2,21 +2,16 @@
 % Please edit documentation in R/csrml.R
 \name{csrml}
 \alias{csrml}
+\alias{csrml_fit}
 \title{Cross-sectional Reconciliation with Machine Learning}
 \usage{
-csrml(
-  base,
-  hat,
-  obs,
-  agg_mat,
-  features = "all",
-  approach = "randomForest",
-  params = NULL,
-  tuning = NULL,
-  fit = NULL,
-  sntz = FALSE,
-  round = FALSE
-)
+# Reconciled forecasts
+csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
+      params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = FALSE)
+
+# Pre-trained reconciled ML models
+csrml_fit(hat, obs, agg_mat, features = "all", approach = "randomForest",
+          params = NULL, tuning = NULL)
 }
 \arguments{
 \item{base}{A (\eqn{h \times n}) numeric matrix or multivariate time series
@@ -36,8 +31,10 @@ cross-sectional aggregation matrix. It maps the \eqn{n_b} bottom-level
 (free) variables into the \eqn{n_a} upper (constrained) variables.}
 
 \item{features}{Character string specifying which features are used for model
-training. Options include "\code{bts}", "\code{str}", "\code{str-bts}", and
-"\code{all}" (\emph{default}).}
+training. Options include "\code{bts}" (only bottom-level series as
+features), \code{str} (features based on the structural matrix),
+"\code{str-bts}" (\code{bts} + \code{str} features), and "\code{all}"
+(all series as features, \emph{default}).}
 
 \item{approach}{Character string specifying the machine learning method used
 for reconciliation. Options are:
@@ -78,12 +75,17 @@ integer values and coherence is ensured via a bottom-up adjustment.
 \emph{Default} is \code{FALSE}.}
 }
 \value{
-If \code{base} is provided, returns a cross-sectional reconciled
-forecast matrix with the same dimensions, along with attributes containing
-the fitted model and reconciliation settings (see, \link[FoReco:recoinfo]{FoReco::recoinfo} and
-\link{extract_reconciled_ml}). If only models are trained (omitting
-\code{base}), returns a fitted object that can be reused for reconciliation
-on new base forecasts (see, \link{extract_reconciled_ml}).
+\itemize{
+\item \link{csrml} returns a cross-sectional reconciled forecast matrix with the same
+dimensions, along with attributes containing the fitted model and
+reconciliation settings (see, \link[FoReco:recoinfo]{FoReco::recoinfo} and
+\link{extract_reconciled_ml}).
+}
+
+\itemize{
+\item \link{csrml_fit} returns a fitted object that can be reused for
+reconciliation on new base forecasts.
+}
 }
 \description{
 This function performs machine-learning–based cross-sectional forecast
@@ -110,24 +112,21 @@ N_hat <- 100
 ts_mean <- c(20, 10, 10)
 
 # hat: a training (base forecasts) feautures matrix
-hat <- matrix(
-  rnorm(length(ts_mean)*N_hat, mean = ts_mean),
-  N_hat, byrow = TRUE)
+hat <- matrix(rnorm(length(ts_mean)*N_hat, mean = ts_mean),
+              N_hat, byrow = TRUE)
 colnames(hat) <- unlist(dimnames(agg_mat))
 
 # obs: (observed) values for bottom-level series (B, C)
-obs <- matrix(
-  rnorm(length(ts_mean[-1])*N_hat, mean = ts_mean[-1]),
-  N_hat, byrow = TRUE)
+obs <- matrix(rnorm(length(ts_mean[-1])*N_hat, mean = ts_mean[-1]),
+              N_hat, byrow = TRUE)
 colnames(obs) <- colnames(agg_mat)
 
 # h: base forecast horizon
 h <- 2
 
 # base: base forecasts matrix
-base <- matrix(
-  rnorm(length(ts_mean)*h, mean = ts_mean),
-  h, byrow = TRUE)
+base <- matrix(rnorm(length(ts_mean)*h, mean = ts_mean),
+               h, byrow = TRUE)
 colnames(base) <- unlist(dimnames(agg_mat))
 
 ##########################################################################
@@ -167,10 +166,10 @@ reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
 \donttest{
 # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,2].
 # We can reduce excessive logging by calling:
-if (requireNamespace("lgr", quietly = TRUE)) {
-  lgr::get_logger("mlr3")$set_threshold("warn")
-  lgr::get_logger("bbotk")$set_threshold("warn")
-}
+# if(requireNamespace("lgr", quietly = TRUE)){
+#   lgr::get_logger("mlr3")$set_threshold("warn")
+#   lgr::get_logger("bbotk")$set_threshold("warn")
+# }
 reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
               approach = "mlr3", features = "all",
               params = list(
@@ -187,8 +186,8 @@ reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
 # Usage with pre-trained models
 ##########################################################################
 # Pre-trained machine learning models (e.g., omit the base param)
-mdl <- csrml(hat = hat, obs = obs, agg_mat = agg_mat,
-             approach = "xgboost", features = "all")
+mdl <- csrml_fit(hat = hat, obs = obs, agg_mat = agg_mat,
+                 approach = "xgboost", features = "all")
 
 # Pre-trained machine learning models with base param
 reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
@@ -196,9 +195,7 @@ reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
 mdl2 <- extract_reconciled_ml(reco)
 
 # New base forecasts matrix
-base_new <- matrix(
-  rnorm(length(ts_mean)*h, mean = ts_mean),
-  h, byrow = TRUE)
+base_new <- matrix(rnorm(length(ts_mean)*h, mean = ts_mean), h, byrow = TRUE)
 reco_new <- csrml(base = base_new, fit = mdl, agg_mat = agg_mat)
 
 }

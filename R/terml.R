@@ -7,6 +7,11 @@
 #' across both temporal dimensions to high-frequency series. Fully coherent
 #' forecasts are then derived by temporal bottom-up.
 #'
+#' @usage
+#' # Reconciled forecasts
+#' terml(base, hat, obs, agg_order, tew = "sum", features = "rtw",
+#'       approach = "randomForest", params = NULL, tuning = NULL,
+#'       fit = NULL, sntz = FALSE, round = FALSE)
 #'
 #' @param base A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
 #'   base forecasts to be reconciled, ordered from lowest to highest frequency;
@@ -21,16 +26,18 @@
 #' @param obs A (\eqn{Nm \times 1}) numeric vector containing (observed) values
 #'   for the highest frequency series (\eqn{k = 1}). These values are used to
 #'   train the ML approach.
-#' @param features Character string specifying which features are used for model
-#'   training. Only "\code{rtw}" is available.
+#' @param features Character string specifying which features are used for
+#'   model training. Options include "\code{rtw}" (see Rombouts et al. 2025,
+#'   \emph{default}) and "\code{rtw-top}" (only the lowest- and
+#'   highest-frequency base forecasts as features).
+#'
 #' @inheritParams ctrml
 #'
-#' @returns If \code{base} is provided, returns a temporal reconciled forecast
-#'   vector with the same dimensions, along with attributes containing the
-#'   fitted model and reconciliation settings (see, [FoReco::recoinfo] and
-#'   [extract_reconciled_ml]). If only models are trained (omitting
-#'   \code{base}), returns a fitted object that can be reused for reconciliation
-#'   on new base forecasts (see, [extract_reconciled_ml]).
+#' @returns
+#'   - [terml] returns a temporal reconciled forecast vector with the same
+#'   dimensions, along with attributes containing the fitted model and
+#'   reconciliation settings (see, [FoReco::recoinfo] and
+#'   [extract_reconciled_ml]).
 #'
 #' @references
 #' Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
@@ -110,10 +117,10 @@
 #' \donttest{
 #' # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
 #' # We can reduce excessive logging by calling:
-#' if(requireNamespace("lgr", quietly = TRUE)){
-#'   lgr::get_logger("mlr3")$set_threshold(NULL)
-#'   lgr::get_logger("bbotk")$set_threshold(NULL)
-#' }
+#' # if(requireNamespace("lgr", quietly = TRUE)){
+#' #   lgr::get_logger("mlr3")$set_threshold("warn")
+#' #   lgr::get_logger("bbotk")$set_threshold("warn")
+#' # }
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
 #'               approach = "mlr3", features = "rtw",
 #'               params = list(
@@ -130,8 +137,8 @@
 #' # Usage with pre-trained models
 #' ##########################################################################
 #' # Pre-trained machine learning models (e.g., omit the base param)
-#' mdl <- terml(hat = hat, obs = obs, agg_order = m,
-#'              approach = "lightgbm", features = "rtw")
+#' mdl <- terml_fit(hat = hat, obs = obs, agg_order = m,
+#'                  approach = "lightgbm", features = "rtw")
 #'
 #' # Pre-trained machine learning models with base param
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
@@ -148,14 +155,214 @@ terml <- function(
   hat,
   obs,
   agg_order,
+  tew = "sum",
   features = "rtw",
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
   fit = NULL,
-  tew = "sum",
   sntz = FALSE,
   round = FALSE
+) {
+  if (is.null(fit)) {
+    if (missing(agg_order)) {
+      cli_abort(
+        "Argument {.arg agg_order} is missing, with no default.",
+        call = NULL
+      )
+    }
+
+    tmp <- tetools(agg_order = agg_order, tew = tew)
+    kset <- tmp$set
+    m <- tmp$dim[["m"]]
+    kt <- tmp$dim[["kt"]]
+    id_hfts <- c(rep(0, tmp$dim[["ks"]]), rep(1, m))
+    strc_mat <- tmp$strc_mat
+    agg_mat <- tmp$agg_mat
+
+    block_sampling <- NULL # block_sampling for the block tuning rtw option on mlr3
+
+    if (missing(obs)) {
+      cli_abort(
+        "Argument {.arg obs} is missing, with no default.",
+        call = NULL
+      )
+    } else if (length(obs) %% m != 0) {
+      cli_abort("Incorrect {.arg obs} length.", call = NULL)
+    } else {
+      if (grepl("rtw", features)) {
+        obs <- cbind(obs)
+      } else {
+        obs <- matrix(obs, ncol = m, byrow = TRUE)
+      }
+    }
+
+    if (missing(hat)) {
+      cli_abort(
+        "Argument {.arg hat} is missing, with no default.",
+        call = NULL
+      )
+    } else if (length(hat) %% kt != 0) {
+      cli_abort("Incorrect {.arg hat} length.", call = NULL)
+    } else {
+      if (grepl("rtw", features)) {
+        hat <- input2rtw(hat, kset)
+      } else {
+        h_hat <- length(hat) / kt
+        hat <- vec2hmat(vec = hat, h = h_hat, kset = kset)
+      }
+    }
+    features_size <- NCOL(hat)
+
+    switch(
+      features,
+      "hfts" = {
+        sel_mat <- as(id_hfts, "sparseVector")
+      },
+      "str" = {
+        sel_mat <- 1 * (strc_mat != 0)
+      },
+      "str-hfts" = {
+        sel_mat <- 1 * (strc_mat != 0)
+        sel_mat <- sel_mat +
+          Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
+        sel_mat[sel_mat != 0] <- 1
+      },
+      "all" = {
+        sel_mat <- 1 #Matrix(1, nrow = kt, ncol = m, sparse = TRUE)
+      },
+      "rtw" = {
+        sel_mat <- 1
+        block_sampling <- tmp$dim[["m"]]
+      },
+      "rtw-top" = {
+        sel_mat <- as(id_hfts, "sparseVector")
+        sel_mat[1] <- 1
+        block_sampling <- tmp$dim[["m"]]
+      },
+      {
+        cli_abort("Unknown {.arg features} option.", call = NULL)
+      }
+    )
+    attr(sel_mat, "sel_method") <- features
+  } else {
+    if (!inherits(fit, "rml_fit")) {
+      cli_abort("Incorrect {.arg fit} object.", call = NULL)
+    }
+
+    if (fit$framework != "te") {
+      cli_abort("Incompatible {.arg fit} framework.", call = NULL)
+    }
+
+    agg_order <- fit$agg_order
+    tew <- fit$tew
+    tmp <- tetools(agg_order = agg_order, tew = tew)
+    kset <- tmp$set
+    kt <- tmp$dim[["kt"]]
+
+    hat <- NULL
+    obs <- NULL
+    sel_mat <- fit$sel_mat
+    approach <- fit$approach
+    features <- attr(fit$sel_mat, "sel_method")
+    features_size <- fit$features_size
+    block_sampling <- fit$block_sampling
+  }
+
+  if (missing(base)) {
+    cli_abort(
+      "Argument {.arg base} is missing, with no default.",
+      call = NULL
+    )
+  } else if (length(base) %% kt != 0) {
+    cli_abort("Incorrect {.arg base} length.", call = NULL)
+  } else {
+    h <- length(base) / kt
+    if (grepl("rtw", features)) {
+      base <- input2rtw(base, kset)
+    } else {
+      base <- vec2hmat(vec = base, h = h, kset = kset)
+    }
+  }
+
+  if (NCOL(base) != features_size) {
+    cli_abort(
+      paste0(
+        "The number of columns of {.arg base} ",
+        "must be equal to the number of ",
+        "features used during fitting."
+      ),
+      call = NULL
+    )
+  }
+
+  reco_mat <- rml(
+    base = base,
+    hat = hat,
+    obs = obs,
+    sel_mat = sel_mat,
+    approach = approach,
+    params = params,
+    fit = fit,
+    tuning = tuning,
+    block_sampling = block_sampling
+  )
+
+  obj <- attr(reco_mat, "fit")
+  obj <- new_rml_fit(
+    fit = obj$fit,
+    agg_order = agg_order,
+    tew = tew,
+    sel_mat = obj$sel_mat,
+    approach = approach,
+    framework = "te",
+    features = features,
+    features_size = features_size,
+    block_sampling = block_sampling
+  )
+
+  attr(reco_mat, "fit") <- NULL
+
+  reco_mat <- tebu(
+    as.vector(t(reco_mat)),
+    agg_order = agg_order,
+    sntz = sntz,
+    round = round,
+    tew = tew
+  )
+
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit = obj,
+    framework = "Temporal",
+    forecast_horizon = h,
+    te_set = tmp$set,
+    rfun = "terml",
+    ml = approach
+  ))
+  return(reco_mat)
+}
+
+#' @usage
+#' # Pre-trained reconciled ML models
+#' terml_fit(hat, obs, agg_order, tew = "sum", features = "rtw",
+#'           approach = "randomForest", params = NULL, tuning = NULL)
+#'
+#' @return
+#'   - [terml_fit] returns a fitted object that can be reused for
+#'     reconciliation on new base forecasts.
+#'
+#' @rdname terml
+#'
+#' @export
+terml_fit <- function(
+  hat,
+  obs,
+  agg_order,
+  tew = "sum",
+  features = "rtw",
+  approach = "randomForest",
+  params = NULL,
+  tuning = NULL
 ) {
   # Check if 'agg_order' is provided
   if (missing(agg_order)) {
@@ -175,129 +382,85 @@ terml <- function(
 
   block_sampling <- NULL # block_sampling for the block tuning rtw option on mlr3
 
-  if (is.null(fit)) {
-    if (missing(obs)) {
-      cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
-    } else if (length(obs) %% m != 0) {
-      cli_abort("Incorrect {.arg obs} length.", call = NULL)
-    } else {
-      if (grepl("rtw", features)) {
-        obs <- cbind(obs)
-      } else {
-        obs <- matrix(obs, ncol = m, byrow = TRUE)
-      }
-    }
-
-    if (missing(hat)) {
-      cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
-    } else if (length(hat) %% kt != 0) {
-      cli_abort("Incorrect {.arg hat} length.", call = NULL)
-    } else {
-      if (grepl("rtw", features)) {
-        hat <- input2rtw(hat, kset)
-      } else {
-        h <- length(hat) / kt
-        hat <- vec2hmat(vec = hat, h = h, kset = kset)
-      }
-    }
-
-    if (missing(base)) {
-      base <- NULL
-    } else if (length(base) %% kt != 0) {
-      cli_abort("Incorrect {.arg base} length.", call = NULL)
-    } else {
-      h <- length(base) / kt
-      if (grepl("rtw", features)) {
-        base <- input2rtw(base, kset)
-      } else {
-        base <- vec2hmat(vec = base, h = h, kset = kset)
-      }
-    }
-
-    switch(
-      features,
-      "hfts" = {
-        sel_mat <- Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
-      },
-      "str" = {
-        sel_mat <- strc_mat
-      },
-      "str-hfts" = {
-        sel_mat <- strc_mat + Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
-        sel_mat[sel_mat != 0] <- 1
-      },
-      "all" = {
-        sel_mat <- Matrix(1, nrow = kt, ncol = m, sparse = TRUE)
-      },
-      "rtw" = {
-        sel_mat <- 1
-        block_sampling <- tmp$dim[["m"]]
-      },
-      {
-        cli_abort("Unknown {.arg features} option.", call = NULL)
-      }
-    )
-    attr(sel_mat, "sel_method") <- features
+  if (missing(obs)) {
+    cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
+  } else if (length(obs) %% m != 0) {
+    cli_abort("Incorrect {.arg obs} length.", call = NULL)
   } else {
-    hat <- NULL
-    obs <- NULL
-    sel_mat <- NULL
-    approach <- fit$approach
-    features <- attr(fit$sel_mat, "sel_method")
-
-    if (missing(base)) {
-      cli_abort(
-        "Argument {.arg base} is missing, with no default.",
-        call = NULL
-      )
-    } else if (length(base) %% kt != 0) {
-      cli_abort("Incorrect {.arg base} length.", call = NULL)
+    if (grepl("rtw", features)) {
+      obs <- cbind(obs)
     } else {
-      h <- length(base) / kt
-      if (grepl("rtw", features)) {
-        base <- input2rtw(base, kset)
-      } else {
-        base <- vec2hmat(vec = base, h = h, kset = kset)
-      }
+      obs <- matrix(obs, ncol = m, byrow = TRUE)
     }
   }
 
-  reco_mat <- rml(
-    base = base,
+  if (missing(hat)) {
+    cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
+  } else if (length(hat) %% kt != 0) {
+    cli_abort("Incorrect {.arg hat} length.", call = NULL)
+  } else {
+    if (grepl("rtw", features)) {
+      hat <- input2rtw(hat, kset)
+    } else {
+      h <- length(hat) / kt
+      hat <- vec2hmat(vec = hat, h = h, kset = kset)
+    }
+  }
+
+  switch(
+    features,
+    "hfts" = {
+      sel_mat <- as(id_hfts, "sparseVector")
+    },
+    "str" = {
+      sel_mat <- 1 * (strc_mat != 0)
+    },
+    "str-hfts" = {
+      sel_mat <- 1 * (strc_mat != 0)
+      sel_mat <- sel_mat + Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
+      sel_mat[sel_mat != 0] <- 1
+    },
+    "all" = {
+      sel_mat <- 1 #Matrix(1, nrow = kt, ncol = m, sparse = TRUE)
+    },
+    "rtw" = {
+      sel_mat <- 1
+      block_sampling <- tmp$dim[["m"]]
+    },
+    "rtw-top" = {
+      sel_mat <- as(id_hfts, "sparseVector")
+      sel_mat[1] <- 1
+      block_sampling <- tmp$dim[["m"]]
+    },
+    {
+      cli_abort("Unknown {.arg features} option.", call = NULL)
+    }
+  )
+  attr(sel_mat, "sel_method") <- features
+
+  obj <- rml(
+    base = NULL,
     hat = hat,
     obs = obs,
     sel_mat = sel_mat,
     approach = approach,
     params = params,
-    fit = fit,
+    fit = NULL,
     tuning = tuning,
     block_sampling = block_sampling
   )
 
-  if (!is.null(base)) {
-    fit <- attr(reco_mat, "fit")
-    fit$approach <- approach
-    attr(reco_mat, "fit") <- NULL
+  obj <- new_rml_fit(
+    fit = obj$fit,
+    agg_order = agg_order,
+    tew = tew,
+    sel_mat = obj$sel_mat,
+    approach = approach,
+    framework = "te",
+    features = features,
+    features_size = NCOL(hat),
+    block_sampling = block_sampling
+  )
 
-    reco_mat <- tebu(
-      as.vector(t(reco_mat)),
-      agg_order = agg_order,
-      sntz = sntz,
-      round = round,
-      tew = tew
-    )
-
-    attr(reco_mat, "FoReco") <- new_foreco_info(list(
-      fit = fit,
-      framework = "Temporal",
-      forecast_horizon = h,
-      te_set = tmp$set,
-      rfun = "terml",
-      ml = approach
-    ))
-    return(reco_mat)
-  } else {
-    reco_mat$approach <- approach
-    return(reco_mat)
-  }
+  return(obj)
 }

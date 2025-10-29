@@ -81,9 +81,12 @@ extract_reconciled_ml <- function(reco) {
   return(info$fit)
 }
 
+#' @export
+#' @method print rml_fit
 print.rml_fit <- function(x, ...) {
   cat("----- Reconciled models -----\n")
-  cat("Features:", attr(x$sel_mat, "sel_method"), "\n")
+  cat("Framework:", x$framework, "\n")
+  cat("Features:", x$features, "\n")
   cat("Approach:", x$approach, "\n")
   cat("  Models:", length(x$fit), "\n")
 }
@@ -101,4 +104,55 @@ input2rtw <- function(x, kset) {
     tmp
   })
   do.call(cbind, rev(x))
+}
+
+# Reconcile using machine learning models class
+#
+# This function creates an object of class \code{reconcile_ml} that contains the
+# necessary components to perform forecast reconciliation using machine learning
+# models.
+#
+# @param features Character string specifying which features are used for model
+#   training.
+# @param features_size Optional numeric vector specifying the size of the
+#   feature set to be used for model training.
+# @param framework Character string specifying the reconciliation framework to
+#   be used. Options include "\code{cs}" for cross-sectional, "\code{te}" for
+#   temporal, and "\code{ct}" for cross-temporal.
+# @param sel_mat Selection matrix/vector to be used to select the features
+#   for each variable. It's strickly related to the \code{features} argument.
+# @inheritParams ctrml
+#
+# @returns Returns a fitted object ([reconcile_ml] class) that can be used
+#   for reconciliation.
+#
+# @export
+new_rml_fit <- function(
+  fit,
+  agg_mat = NULL,
+  agg_order = NULL,
+  tew = NULL,
+  sel_mat = NULL,
+  approach = NULL,
+  framework = NULL,
+  features = NULL,
+  features_size = NULL,
+  block_sampling = NULL
+) {
+  framework <- match.arg(framework, choices = c("cs", "te", "ct"))
+  structure(
+    list(
+      agg_mat = agg_mat,
+      agg_order = agg_order,
+      tew = tew,
+      fit = fit,
+      sel_mat = sel_mat,
+      approach = approach,
+      framework = framework,
+      features = features,
+      features_size = features_size,
+      block_sampling = block_sampling
+    ),
+    class = "rml_fit"
+  )
 }

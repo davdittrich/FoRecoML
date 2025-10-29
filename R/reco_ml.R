@@ -41,7 +41,7 @@ rml <- function(
     #   set.seed(seed)
     # }
   } else {
-    sel_mat <- fit$sel_mat
+    # sel_mat <- fit$sel_mat
     p <- length(fit$fit)
   }
 
@@ -51,10 +51,10 @@ rml <- function(
   }
 
   out <- lapply(1:p, function(i) {
-    if (is(sel_mat, "sparseVector") | is.vector(sel_mat)) {
-      id <- which(sel_mat == 1)
-    } else if (length(sel_mat) == 1) {
+    if (length(sel_mat) == 1) {
       id <- seq_len(max(NCOL(hat), NCOL(base)))
+    } else if (is(sel_mat, "sparseVector") | NCOL(sel_mat) == 1) {
+      id <- which(sel_mat == 1)
     } else {
       id <- which(sel_mat[, i] == 1)
     }

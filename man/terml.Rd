@@ -2,22 +2,17 @@
 % Please edit documentation in R/terml.R
 \name{terml}
 \alias{terml}
+\alias{terml_fit}
 \title{Temporal Reconciliation with Machine Learning}
 \usage{
-terml(
-  base,
-  hat,
-  obs,
-  agg_order,
-  features = "rtw",
-  approach = "randomForest",
-  params = NULL,
-  tuning = NULL,
-  fit = NULL,
-  tew = "sum",
-  sntz = FALSE,
-  round = FALSE
-)
+# Reconciled forecasts
+terml(base, hat, obs, agg_order, tew = "sum", features = "rtw",
+      approach = "randomForest", params = NULL, tuning = NULL,
+      fit = NULL, sntz = FALSE, round = FALSE)
+
+# Pre-trained reconciled ML models
+terml_fit(hat, obs, agg_order, tew = "sum", features = "rtw",
+          approach = "randomForest", params = NULL, tuning = NULL)
 }
 \arguments{
 \item{base}{A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
@@ -40,8 +35,15 @@ train the ML approach.}
 (max. order of temporal aggregation, \eqn{m}), or a vector representing a
 subset of \eqn{p} factors of \eqn{m}.}
 
-\item{features}{Character string specifying which features are used for model
-training. Only "\code{rtw}" is available.}
+\item{tew}{A string specifying the type of temporal aggregation. Options
+include: "\code{sum}" (simple summation, \emph{default}), "\code{avg}"
+(average), "\code{first}" (first value of the period), and "\code{last}"
+(last value of the period).}
+
+\item{features}{Character string specifying which features are used for
+model training. Options include "\code{rtw}" (see Rombouts et al. 2025,
+\emph{default}) and "\code{rtw-top}" (only the lowest- and
+highest-frequency base forecasts as features).}
 
 \item{approach}{Character string specifying the machine learning method used
 for reconciliation. Options are:
@@ -73,11 +75,6 @@ through \code{params}.}
 \link{extract_reconciled_ml}). If supplied, training data (\code{hat},
 \code{obs}) are not required.}
 
-\item{tew}{A string specifying the type of temporal aggregation. Options
-include: "\code{sum}" (simple summation, \emph{default}), "\code{avg}"
-(average), "\code{first}" (first value of the period), and "\code{last}"
-(last value of the period).}
-
 \item{sntz}{Logical. If \code{TRUE}, enforces non-negativity on reconciled
 forecasts using the heuristic "set-negative-to-zero" (Di Fonzo and
 Girolimetto, 2023). \emph{Default} is \code{FALSE}.}
@@ -87,12 +84,17 @@ integer values and coherence is ensured via a bottom-up adjustment.
 \emph{Default} is \code{FALSE}.}
 }
 \value{
-If \code{base} is provided, returns a temporal reconciled forecast
-vector with the same dimensions, along with attributes containing the
-fitted model and reconciliation settings (see, \link[FoReco:recoinfo]{FoReco::recoinfo} and
-\link{extract_reconciled_ml}). If only models are trained (omitting
-\code{base}), returns a fitted object that can be reused for reconciliation
-on new base forecasts (see, \link{extract_reconciled_ml}).
+\itemize{
+\item \link{terml} returns a temporal reconciled forecast vector with the same
+dimensions, along with attributes containing the fitted model and
+reconciliation settings (see, \link[FoReco:recoinfo]{FoReco::recoinfo} and
+\link{extract_reconciled_ml}).
+}
+
+\itemize{
+\item \link{terml_fit} returns a fitted object that can be reused for
+reconciliation on new base forecasts.
+}
 }
 \description{
 This function performs machine-learning–based temporal forecast
@@ -165,10 +167,10 @@ reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
 \donttest{
 # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
 # We can reduce excessive logging by calling:
-if(requireNamespace("lgr", quietly = TRUE)){
-  lgr::get_logger("mlr3")$set_threshold(NULL)
-  lgr::get_logger("bbotk")$set_threshold(NULL)
-}
+# if(requireNamespace("lgr", quietly = TRUE)){
+#   lgr::get_logger("mlr3")$set_threshold("warn")
+#   lgr::get_logger("bbotk")$set_threshold("warn")
+# }
 reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
               approach = "mlr3", features = "rtw",
               params = list(
@@ -185,8 +187,8 @@ reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
 # Usage with pre-trained models
 ##########################################################################
 # Pre-trained machine learning models (e.g., omit the base param)
-mdl <- terml(hat = hat, obs = obs, agg_order = m,
-             approach = "lightgbm", features = "rtw")
+mdl <- terml_fit(hat = hat, obs = obs, agg_order = m,
+                 approach = "lightgbm", features = "rtw")
 
 # Pre-trained machine learning models with base param
 reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,

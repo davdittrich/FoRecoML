@@ -12,6 +12,10 @@
 #' constrained time series it can be applied within the broader reconciliation
 #' framework described by Girolimetto and Di Fonzo (2024).
 #'
+#' @usage
+#' # Reconciled forecasts
+#' csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
+#'       params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = FALSE)
 #'
 #' @param base A (\eqn{h \times n}) numeric matrix or multivariate time series
 #'   (\code{mts} class) containing the base forecasts to be reconciled; \eqn{h}
@@ -23,16 +27,17 @@
 #'   to train the ML approach; \eqn{n_b} is the total number of bottom
 #'   variables.
 #' @param features Character string specifying which features are used for model
-#'   training. Options include "\code{bts}", "\code{str}", "\code{str-bts}", and
-#'   "\code{all}" (\emph{default}).
+#'   training. Options include "\code{bts}" (only bottom-level series as
+#'   features), \code{str} (features based on the structural matrix),
+#'   "\code{str-bts}" (\code{bts} + \code{str} features), and "\code{all}"
+#'   (all series as features, \emph{default}).
 #' @inheritParams ctrml
 #'
-#' @returns If \code{base} is provided, returns a cross-sectional reconciled
-#'   forecast matrix with the same dimensions, along with attributes containing
-#'   the fitted model and reconciliation settings (see, [FoReco::recoinfo] and
-#'   [extract_reconciled_ml]). If only models are trained (omitting
-#'   \code{base}), returns a fitted object that can be reused for reconciliation
-#'   on new base forecasts (see, [extract_reconciled_ml]).
+#' @returns
+#'   - [csrml] returns a cross-sectional reconciled forecast matrix with the same
+#'   dimensions, along with attributes containing the fitted model and
+#'   reconciliation settings (see, [FoReco::recoinfo] and
+#'   [extract_reconciled_ml]).
 #'
 #' @references
 #' Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
@@ -61,24 +66,21 @@
 #' ts_mean <- c(20, 10, 10)
 #'
 #' # hat: a training (base forecasts) feautures matrix
-#' hat <- matrix(
-#'   rnorm(length(ts_mean)*N_hat, mean = ts_mean),
-#'   N_hat, byrow = TRUE)
+#' hat <- matrix(rnorm(length(ts_mean)*N_hat, mean = ts_mean),
+#'               N_hat, byrow = TRUE)
 #' colnames(hat) <- unlist(dimnames(agg_mat))
 #'
 #' # obs: (observed) values for bottom-level series (B, C)
-#' obs <- matrix(
-#'   rnorm(length(ts_mean[-1])*N_hat, mean = ts_mean[-1]),
-#'   N_hat, byrow = TRUE)
+#' obs <- matrix(rnorm(length(ts_mean[-1])*N_hat, mean = ts_mean[-1]),
+#'               N_hat, byrow = TRUE)
 #' colnames(obs) <- colnames(agg_mat)
 #'
 #' # h: base forecast horizon
 #' h <- 2
 #'
 #' # base: base forecasts matrix
-#' base <- matrix(
-#'   rnorm(length(ts_mean)*h, mean = ts_mean),
-#'   h, byrow = TRUE)
+#' base <- matrix(rnorm(length(ts_mean)*h, mean = ts_mean),
+#'                h, byrow = TRUE)
 #' colnames(base) <- unlist(dimnames(agg_mat))
 #'
 #' ##########################################################################
@@ -118,10 +120,10 @@
 #' \donttest{
 #' # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,2].
 #' # We can reduce excessive logging by calling:
-#' if (requireNamespace("lgr", quietly = TRUE)) {
-#'   lgr::get_logger("mlr3")$set_threshold("warn")
-#'   lgr::get_logger("bbotk")$set_threshold("warn")
-#' }
+#' # if(requireNamespace("lgr", quietly = TRUE)){
+#' #   lgr::get_logger("mlr3")$set_threshold("warn")
+#' #   lgr::get_logger("bbotk")$set_threshold("warn")
+#' # }
 #' reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
 #'               approach = "mlr3", features = "all",
 #'               params = list(
@@ -138,8 +140,8 @@
 #' # Usage with pre-trained models
 #' ##########################################################################
 #' # Pre-trained machine learning models (e.g., omit the base param)
-#' mdl <- csrml(hat = hat, obs = obs, agg_mat = agg_mat,
-#'              approach = "xgboost", features = "all")
+#' mdl <- csrml_fit(hat = hat, obs = obs, agg_mat = agg_mat,
+#'                  approach = "xgboost", features = "all")
 #'
 #' # Pre-trained machine learning models with base param
 #' reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
@@ -147,9 +149,7 @@
 #' mdl2 <- extract_reconciled_ml(reco)
 #'
 #' # New base forecasts matrix
-#' base_new <- matrix(
-#'   rnorm(length(ts_mean)*h, mean = ts_mean),
-#'   h, byrow = TRUE)
+#' base_new <- matrix(rnorm(length(ts_mean)*h, mean = ts_mean), h, byrow = TRUE)
 #' reco_new <- csrml(base = base_new, fit = mdl, agg_mat = agg_mat)
 #'
 #' @export
@@ -166,6 +166,140 @@ csrml <- function(
   sntz = FALSE,
   round = FALSE
 ) {
+  if (is.null(fit)) {
+    if (missing(agg_mat)) {
+      cli_abort(
+        "Argument {.arg agg_mat} is missing, with no default.",
+        call = NULL
+      )
+    }
+
+    tmp <- cstools(agg_mat = agg_mat)
+    n <- tmp$dim[["n"]]
+    nb <- tmp$dim[["nb"]]
+    strc_mat <- tmp$strc_mat
+    agg_mat <- tmp$agg_mat
+    id_bts <- c(rep(0, n - nb), rep(1, nb))
+
+    if (missing(obs)) {
+      cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
+    } else if (NCOL(obs) != nb) {
+      cli_abort("Incorrect {.arg obs} columns dimension.", call = NULL)
+    }
+
+    if (missing(hat)) {
+      cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
+    }
+
+    if (NCOL(hat) != n) {
+      cli_abort("Incorrect {.arg hat} columns dimension.", call = NULL)
+    }
+
+    switch(
+      features,
+      "bts" = {
+        sel_mat <- Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+      },
+      "str" = {
+        sel_mat <- 1 * (strc_mat != 0)
+      },
+      "str-bts" = {
+        sel_mat <- 1 * (strc_mat != 0)
+        sel_mat <- sel_mat + Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+        sel_mat[sel_mat != 0] <- 1
+      },
+      "all" = {
+        sel_mat <- Matrix(1, nrow = n, ncol = nb, sparse = TRUE)
+      },
+      {
+        cli_abort("Unknown {.arg features} option.", call = NULL)
+      }
+    )
+    attr(sel_mat, "sel_method") <- features
+  } else {
+    if (!inherits(fit, "rml_fit")) {
+      cli_abort("Incorrect {.arg fit} object.", call = NULL)
+    }
+
+    if (fit$framework != "cs") {
+      cli_abort("Incompatible {.arg fit} framework.", call = NULL)
+    }
+
+    hat <- NULL
+    obs <- NULL
+    sel_mat <- fit$sel_mat
+    approach <- fit$approach
+    features <- fit$features
+    agg_mat <- fit$agg_mat
+    n <- fit$features_size
+  }
+
+  if (missing(base)) {
+    cli_abort(
+      "Argument {.arg base} is missing, with no default.",
+      call = NULL
+    )
+  } else if (NCOL(base) != n) {
+    cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
+  }
+
+  reco_mat <- rml(
+    base = base,
+    hat = hat,
+    obs = obs,
+    sel_mat = sel_mat,
+    approach = approach,
+    params = params,
+    fit = fit,
+    tuning = tuning
+  )
+
+  obj <- attr(reco_mat, "fit")
+  obj <- new_rml_fit(
+    fit = obj$fit,
+    agg_mat = agg_mat,
+    sel_mat = obj$sel_mat,
+    approach = approach,
+    framework = "cs",
+    features = features,
+    features_size = n
+  )
+  attr(reco_mat, "fit") <- NULL
+  reco_mat <- csbu(reco_mat, agg_mat = agg_mat, round = round, sntz = sntz)
+
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit = obj,
+    framework = "Cross-sectional",
+    forecast_horizon = NROW(reco_mat),
+    cs_n = n,
+    rfun = "csrml",
+    ml = approach
+  ))
+  return(reco_mat)
+}
+
+
+#' @usage
+#' # Pre-trained reconciled ML models
+#' csrml_fit(hat, obs, agg_mat, features = "all", approach = "randomForest",
+#'           params = NULL, tuning = NULL)
+#'
+#' @return
+#'   - [csrml_fit] returns a fitted object that can be reused for
+#'     reconciliation on new base forecasts.
+#'
+#' @rdname csrml
+#'
+#' @export
+csrml_fit <- function(
+  hat,
+  obs,
+  agg_mat,
+  features = "all",
+  approach = "randomForest",
+  params = NULL,
+  tuning = NULL
+) {
   if (missing(agg_mat)) {
     cli_abort(
       "Argument {.arg agg_mat} is missing, with no default.",
@@ -180,86 +314,57 @@ csrml <- function(
   agg_mat <- tmp$agg_mat
   id_bts <- c(rep(0, n - nb), rep(1, nb))
 
-  if (is.null(fit)) {
-    if (missing(obs)) {
-      cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
-    } else if (NCOL(obs) != nb) {
-      cli_abort("Incorrect {.arg obs} columns dimension.", call = NULL)
-    }
-
-    if (missing(hat)) {
-      cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
-    }
-
-    if (missing(base)) {
-      base <- NULL
-    }
-
-    switch(
-      features,
-      "bts" = {
-        sel_mat <- Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
-      },
-      "str" = {
-        sel_mat <- strc_mat
-      },
-      "str-bts" = {
-        sel_mat <- strc_mat + Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
-        sel_mat[sel_mat != 0] <- 1
-      },
-      "all" = {
-        sel_mat <- Matrix(1, nrow = n, ncol = nb, sparse = TRUE)
-      },
-      {
-        cli_abort("Unknown {.arg features} option.", call = NULL)
-      }
-    )
-    attr(sel_mat, "sel_method") <- features
-  } else {
-    hat <- NULL
-    obs <- NULL
-    sel_mat <- NULL
-    approach <- fit$approach
-    features <- attr(fit$sel_mat, "sel_method")
-
-    if (missing(base)) {
-      cli_abort(
-        "Argument {.arg base} is missing, with no default.",
-        call = NULL
-      )
-    } else if (NCOL(base) != n) {
-      cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
-    }
+  if (missing(obs)) {
+    cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
+  } else if (NCOL(obs) != nb) {
+    cli_abort("Incorrect {.arg obs} columns dimension.", call = NULL)
   }
 
-  reco_mat <- rml(
-    base = base,
+  if (missing(hat)) {
+    cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
+  }
+
+  switch(
+    features,
+    "bts" = {
+      sel_mat <- Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+    },
+    "str" = {
+      sel_mat <- 1 * (strc_mat != 0)
+    },
+    "str-bts" = {
+      sel_mat <- 1 * (strc_mat != 0)
+      sel_mat <- sel_mat + Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+      sel_mat[sel_mat != 0] <- 1
+    },
+    "all" = {
+      sel_mat <- Matrix(1, nrow = n, ncol = nb, sparse = TRUE)
+    },
+    {
+      cli_abort("Unknown {.arg features} option.", call = NULL)
+    }
+  )
+  attr(sel_mat, "sel_method") <- features
+
+  obj <- rml(
+    base = NULL,
     hat = hat,
     obs = obs,
     sel_mat = sel_mat,
     approach = approach,
     params = params,
-    fit = fit,
     tuning = tuning
   )
 
-  if (!is.null(base)) {
-    fit <- attr(reco_mat, "fit")
-    fit$approach <- approach
-    attr(reco_mat, "fit") <- NULL
-    reco_mat <- csbu(reco_mat, agg_mat = agg_mat, round = round, sntz = sntz)
+  obj <- new_rml_fit(
+    fit = obj$fit,
+    agg_mat = agg_mat,
+    sel_mat = obj$sel_mat,
+    approach = approach,
+    framework = "cs",
+    features = features,
+    features_size = ncol(hat)
+  )
 
-    attr(reco_mat, "FoReco") <- new_foreco_info(list(
-      fit = fit,
-      framework = "Cross-sectional",
-      forecast_horizon = NROW(reco_mat),
-      cs_n = n,
-      rfun = "csrml",
-      ml = approach
-    ))
-    return(reco_mat)
-  } else {
-    reco_mat$approach <- approach
-    return(reco_mat)
-  }
+  return(obj)
 }

@@ -63,7 +63,7 @@ if (require(testthat)) {
   })
 
   test_that("Two step", {
-    mdl <- ctrml(
+    mdl <- ctrml_fit(
       hat = hat,
       obs = obs,
       agg_order = m,
@@ -91,11 +91,15 @@ if (require(testthat)) {
   })
 
   test_that("Errors", {
+    expect_error(ctrml_fit(hat = hat, obs = obs, agg_order = m))
+    expect_error(ctrml_fit(hat = hat, obs = obs, agg_mat = agg_mat))
+    expect_error(ctrml_fit(hat = hat, agg_order = m, agg_mat = agg_mat))
+    expect_error(ctrml_fit(obs = obs, agg_order = m, agg_mat = agg_mat))
     expect_error(ctrml(hat = hat, obs = obs, agg_order = m))
     expect_error(ctrml(hat = hat, obs = obs, agg_mat = agg_mat))
     expect_error(ctrml(hat = hat, agg_order = m, agg_mat = agg_mat))
     expect_error(ctrml(obs = obs, agg_order = m, agg_mat = agg_mat))
-    mdl <- ctrml(
+    mdl <- ctrml_fit(
       hat = hat,
       obs = obs,
       agg_order = m,

@@ -41,7 +41,7 @@ if (require(testthat)) {
   })
 
   test_that("Two step", {
-    mdl <- terml(
+    mdl <- terml_fit(
       hat = hat,
       obs = obs,
       agg_order = m,
@@ -67,10 +67,13 @@ if (require(testthat)) {
   })
 
   test_that("Errors", {
+    expect_error(terml_fit(hat = hat, obs = obs))
+    expect_error(terml_fit(hat = hat, agg_order = m))
+    expect_error(terml_fit(obs = obs, agg_order = m))
     expect_error(terml(hat = hat, obs = obs))
     expect_error(terml(hat = hat, agg_order = m))
     expect_error(terml(obs = obs, agg_order = m))
-    mdl <- terml(
+    mdl <- terml_fit(
       hat = hat,
       obs = obs,
       agg_order = m,

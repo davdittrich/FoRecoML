@@ -11,6 +11,11 @@
 #' series it can be applied within the broader reconciliation framework
 #' described by Girolimetto and Di Fonzo (2024).
 #'
+#' @usage
+#' # Reconciled forecasts
+#' ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "rtw-all",
+#'       approach = "randomForest", params = NULL, tuning = NULL,
+#'       fit = NULL, sntz = FALSE, round = FALSE)
 #'
 #' @param base A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
 #'   forecasts to be reconciled; \eqn{n} is the total number of variables,
@@ -31,8 +36,8 @@
 #'   total number of high-frequency bottom variables. These values are used to
 #'   train the ML approach.
 #' @param features Character string specifying which features are used for model
-#'   training. Options include "\code{rtw-all}", and "\code{rtw-comp}"
-#'   (\emph{default}).
+#'   training. Options include "\code{rtw-all}" (see Rombouts et al. 2025), and
+#'   "\code{rtw-comp}" (see Rombouts et al. 2025, \emph{default}).
 #' @param fit A pre-trained ML reconciliation model (see,
 #'   [extract_reconciled_ml]). If supplied, training data (\code{hat},
 #'   \code{obs}) are not required.
@@ -67,12 +72,11 @@
 #'   through `params`.
 #' @inheritParams FoReco::ctrec
 #'
-#' @returns If \code{base} is provided, returns a cross-temporal reconciled
-#'   forecast matrix with the same dimensions, along with attributes containing
-#'   the fitted model and reconciliation settings (see, [FoReco::recoinfo] and
-#'   [extract_reconciled_ml]). If only models are trained (omitting
-#'   \code{base}), returns a fitted object that can be reused for reconciliation
-#'   on new base forecasts (see, [extract_reconciled_ml]).
+#' @returns
+#'   - [ctrml] returns a cross-temporal reconciled forecast matrix with the
+#'   same dimensions, along with attributes containing the fitted model and
+#'   reconciliation settings (see, [FoReco::recoinfo] and
+#'   [extract_reconciled_ml]).
 #'
 #' @references
 #' Di Fonzo, T. and Girolimetto, D. (2023), Spatio-temporal reconciliation of
@@ -173,10 +177,10 @@
 #' \donttest{
 #' # With mlr3 we can also tune our parameters: e.g. explore mtry in [1,4].
 #' # We can reduce excessive logging by calling:
-#' if(requireNamespace("lgr", quietly = TRUE)){
-#'   lgr::get_logger("mlr3")$set_threshold("warn")
-#'   lgr::get_logger("bbotk")$set_threshold("warn")
-#' }
+#' # if(requireNamespace("lgr", quietly = TRUE)){
+#' #   lgr::get_logger("mlr3")$set_threshold("warn")
+#' #   lgr::get_logger("bbotk")$set_threshold("warn")
+#' # }
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
 #'               agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
 #'               params = list(
@@ -193,13 +197,12 @@
 #' # Usage with pre-trained models
 #' ##########################################################################
 #' # Pre-trained machine learning models (e.g., omit the base param)
-#' mdl <- ctrml(hat = hat, obs = obs,
-#'              agg_order = m, agg_mat = agg_mat, approach = "lightgbm",
-#'              features = "rtw-all")
+#' mdl <- ctrml_fit(hat = hat, obs = obs, agg_order = m, agg_mat = agg_mat,
+#'                  approach = "xgboost", features = "rtw-all")
 #'
 #' # Pre-trained machine learning models with base param
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "lightgbm", features = "rtw-all")
+#'               agg_mat = agg_mat, approach = "xgboost", features = "rtw-all")
 #' mdl2 <- extract_reconciled_ml(reco)
 #'
 #' # New base forecasts matrix
@@ -218,34 +221,34 @@ ctrml <- function(
   obs,
   agg_mat,
   agg_order,
+  tew = "sum",
   features = "rtw-all",
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
   fit = NULL,
-  tew = "sum",
   sntz = FALSE,
   round = FALSE
 ) {
-  # Check if 'agg_order' is provided
-  if (missing(agg_order)) {
-    cli_abort(
-      "Argument {.arg agg_order} is missing, with no default.",
-      call = NULL
-    )
-  }
-
-  tmp <- cttools(agg_mat = agg_mat, agg_order = agg_order, tew = tew)
-  strc_mat <- tmp$strc_mat
-
-  id_bts <- c(rep(0, tmp$dim[["na"]]), rep(1, tmp$dim[["nb"]]))
-  id_hfts <- c(rep(0, tmp$dim[["ks"]]), rep(1, tmp$dim[["m"]]))
-  id_hfbts <- as.numeric(kronecker(id_bts, id_hfts))
-
-  # block_sampling for the block tuning rtw option on mlr3
-  block_sampling <- NULL
-
   if (is.null(fit)) {
+    # Check if 'agg_order' is provided
+    if (missing(agg_order)) {
+      cli_abort(
+        "Argument {.arg agg_order} is missing, with no default.",
+        call = NULL
+      )
+    }
+
+    tmp <- cttools(agg_mat = agg_mat, agg_order = agg_order, tew = tew)
+    strc_mat <- tmp$strc_mat
+
+    id_bts <- c(rep(0, tmp$dim[["na"]]), rep(1, tmp$dim[["nb"]]))
+    id_hfts <- c(rep(0, tmp$dim[["ks"]]), rep(1, tmp$dim[["m"]]))
+    id_hfbts <- as.numeric(kronecker(id_bts, id_hfts))
+
+    # block_sampling for the block tuning rtw option on mlr3
+    block_sampling <- NULL
+
     if (missing(obs)) {
       cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
     } else if (NCOL(obs) %% tmp$dim[["m"]] != 0) {
@@ -277,22 +280,7 @@ ctrml <- function(
         hat <- mat2hmat(hat, h = h, kset = tmp$set, n = tmp$dim[["n"]])
       }
     }
-
-    if (missing(base)) {
-      base <- NULL
-    } else if (NCOL(base) %% tmp$dim[["kt"]] != 0) {
-      cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
-    } else if (NROW(base) != tmp$dim[["n"]]) {
-      cli_abort("Incorrect {.arg base} rows dimension.", call = NULL)
-    } else {
-      h <- NCOL(base) / tmp$dim[["kt"]]
-      if (grepl("rtw", features)) {
-        base <- input2rtw(base, tmp$set)
-      } else {
-        # Calculate 'h' and 'base_hmat'
-        base <- mat2hmat(base, h = h, kset = tmp$set, n = tmp$dim[["n"]])
-      }
-    }
+    features_size <- NCOL(hat)
 
     switch(
       features,
@@ -359,29 +347,58 @@ ctrml <- function(
     )
     attr(sel_mat, "sel_method") <- features
   } else {
+    if (!inherits(fit, "rml_fit")) {
+      cli_abort("Incorrect {.arg fit} object.", call = NULL)
+    }
+
+    if (fit$framework != "ct") {
+      cli_abort("Incompatible {.arg fit} framework.", call = NULL)
+    }
+
+    agg_order <- fit$agg_order
+    agg_mat <- fit$agg_mat
+    tew <- fit$tew
+    tmp <- cttools(agg_order = agg_order, agg_mat = agg_mat, tew = tew)
+    kset <- tmp$set
+    kt <- tmp$dim[["kt"]]
+
     hat <- NULL
     obs <- NULL
-    sel_mat <- NULL
+    sel_mat <- fit$sel_mat
     approach <- fit$approach
     features <- attr(fit$sel_mat, "sel_method")
+    features_size <- fit$features_size
+    block_sampling <- fit$block_sampling
+  }
 
-    if (missing(base)) {
-      cli_abort(
-        "Argument {.arg base} is missing, with no default.",
-        call = NULL
-      )
-    } else if (NCOL(base) %% tmp$dim[["kt"]] != 0) {
-      cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
-    } else if (NROW(base) != tmp$dim[["n"]]) {
-      cli_abort("Incorrect {.arg base} rows dimension.", call = NULL)
+  if (missing(base)) {
+    cli_abort(
+      "Argument {.arg base} is missing, with no default.",
+      call = NULL
+    )
+  } else if (NCOL(base) %% tmp$dim[["kt"]] != 0) {
+    cli_abort("Incorrect {.arg base} columns dimension.", call = NULL)
+  } else if (NROW(base) != tmp$dim[["n"]]) {
+    cli_abort("Incorrect {.arg base} rows dimension.", call = NULL)
+  } else {
+    h <- NCOL(base) / tmp$dim[["kt"]]
+    if (grepl("rtw", features)) {
+      base <- input2rtw(base, tmp$set)
     } else {
-      h <- NCOL(base) / tmp$dim[["kt"]]
-      if (grepl("rtw", features)) {
-        base <- input2rtw(base, tmp$set)
-      } else {
-        base <- mat2hmat(base, h = h, kset = tmp$set, n = tmp$dim[["n"]])
-      }
+      # Calculate 'h' and 'base_hmat'
+      base <- mat2hmat(base, h = h, kset = tmp$set, n = tmp$dim[["n"]])
     }
+  }
+
+  if (NCOL(base) != features_size) {
+    cli_abort(
+      paste0(
+        "The number of columns of {.arg base} ",
+        "must be equal to the number of ",
+        "features used during fitting."
+      ),
+      call = NULL
+    )
   }
 
   reco_mat <- rml(
@@ -396,35 +413,206 @@ ctrml <- function(
     block_sampling = block_sampling
   )
 
-  if (!is.null(base)) {
-    fit <- attr(reco_mat, "fit")
-    fit$approach <- approach
-    attr(reco_mat, "fit") <- NULL
-    if (!grepl("rtw", features)) {
-      reco_mat <- matrix(as.vector(reco_mat), ncol = tmp$dim[["nb"]])
-    }
-
-    reco_mat <- ctbu(
-      t(reco_mat),
-      agg_order = agg_order,
-      agg_mat = agg_mat,
-      sntz = sntz,
-      round = round,
-      tew = tew
-    )
-
-    attr(reco_mat, "FoReco") <- new_foreco_info(list(
-      fit = fit,
-      framework = "Cross-temporal",
-      forecast_horizon = h,
-      te_set = tmp$set,
-      cs_n = tmp$dim[["n"]],
-      rfun = "ctrml",
-      ml = approach
-    ))
-    return(reco_mat)
-  } else {
-    reco_mat$approach <- approach
-    return(reco_mat)
+  obj <- attr(reco_mat, "fit")
+  obj <- new_rml_fit(
+    fit = obj$fit,
+    agg_mat = agg_mat,
+    agg_order = agg_order,
+    tew = tew,
+    sel_mat = obj$sel_mat,
+    approach = approach,
+    framework = "ct",
+    features = features,
+    features_size = features_size,
+    block_sampling = block_sampling
+  )
+  attr(reco_mat, "fit") <- NULL
+  if (!grepl("rtw", features)) {
+    reco_mat <- matrix(as.vector(reco_mat), ncol = tmp$dim[["nb"]])
   }
+
+  reco_mat <- ctbu(
+    t(reco_mat),
+    agg_order = agg_order,
+    agg_mat = agg_mat,
+    sntz = sntz,
+    round = round,
+    tew = tew
+  )
+
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit = obj,
+    framework = "Cross-temporal",
+    forecast_horizon = h,
+    te_set = tmp$set,
+    cs_n = tmp$dim[["n"]],
+    rfun = "ctrml",
+    ml = approach
+  ))
+  return(reco_mat)
+}
+
+#' @usage
+#' # Pre-trained reconciled ML models
+#' ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "rtw-all",
+#'           approach = "randomForest", params = NULL, tuning = NULL)
+#'
+#' @return
+#'   - [ctrml_fit] returns a fitted object that can be reused for
+#'     reconciliation on new base forecasts.
+#'
+#' @rdname ctrml
+#'
+#' @export
+ctrml_fit <- function(
+  hat,
+  obs,
+  agg_mat,
+  agg_order,
+  tew = "sum",
+  features = "rtw-all",
+  approach = "randomForest",
+  params = NULL,
+  tuning = NULL
+) {
+  # Check if 'agg_order' is provided
+  if (missing(agg_order)) {
+    cli_abort(
+      "Argument {.arg agg_order} is missing, with no default.",
+      call = NULL
+    )
+  }
+
+  tmp <- cttools(agg_mat = agg_mat, agg_order = agg_order, tew = tew)
+  strc_mat <- tmp$strc_mat
+
+  id_bts <- c(rep(0, tmp$dim[["na"]]), rep(1, tmp$dim[["nb"]]))
+  id_hfts <- c(rep(0, tmp$dim[["ks"]]), rep(1, tmp$dim[["m"]]))
+  id_hfbts <- as.numeric(kronecker(id_bts, id_hfts))
+
+  # block_sampling for the block tuning rtw option on mlr3
+  block_sampling <- NULL
+
+  if (missing(obs)) {
+    cli_abort("Argument {.arg obs} is missing, with no default.", call = NULL)
+  } else if (NCOL(obs) %% tmp$dim[["m"]] != 0) {
+    cli_abort("Incorrect {.arg obs} columns dimension.", call = NULL)
+  } else if (NROW(obs) != tmp$dim[["nb"]]) {
+    cli_abort("Incorrect {.arg obs} rows dimension.", call = NULL)
+  } else {
+    if (grepl("rtw", features)) {
+      obs <- t(obs)
+    } else {
+      obs <- matrix(
+        as.vector(t(obs)),
+        ncol = tmp$dim[["m"]] * tmp$dim[["nb"]]
+      )
+    }
+  }
+
+  if (missing(hat)) {
+    cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
+  } else if (NCOL(hat) %% tmp$dim[["kt"]] != 0) {
+    cli_abort("Incorrect {.arg hat} columns dimension.", call = NULL)
+  } else if (NROW(hat) != tmp$dim[["n"]]) {
+    cli_abort("Incorrect {.arg hat} rows dimension.", call = NULL)
+  } else {
+    if (grepl("rtw", features)) {
+      hat <- input2rtw(hat, tmp$set)
+    } else {
+      h <- NCOL(hat) / tmp$dim[["kt"]]
+      hat <- mat2hmat(hat, h = h, kset = tmp$set, n = tmp$dim[["n"]])
+    }
+  }
+
+  switch(
+    features,
+    "hfbts" = {
+      sel_mat <- as(id_hfbts, "sparseVector")
+    },
+    "hfts" = {
+      sel_mat <- as(rep(id_hfts, tmp$dim[["n"]]), "sparseVector")
+    },
+    "bts" = {
+      sel_mat <- as(rep(id_bts, each = tmp$dim[["kt"]]), "sparseVector")
+    },
+    "str" = {
+      sel_mat <- 1 * (sel_mat != 0)
+    },
+    "str-hfbts" = {
+      sel_mat <- 1 * (sel_mat != 0)
+      sel_mat <- sel_mat +
+        Matrix(
+          rep(id_hfbts, tmp$dim[["nb"]] * tmp$dim[["m"]]),
+          ncol = tmp$dim[["nb"]] * tmp$dim[["m"]],
+          sparse = TRUE
+        )
+      sel_mat[sel_mat != 0] <- 1
+    },
+    "str-bts" = {
+      sel_mat <- 1 * (sel_mat != 0)
+      sel_mat <- sel_mat +
+        Matrix(
+          rep(
+            rep(id_bts, each = tmp$dim[["kt"]]),
+            tmp$dim[["nb"]] * tmp$dim[["m"]]
+          ),
+          ncol = tmp$dim[["nb"]] * tmp$dim[["m"]],
+          sparse = TRUE
+        )
+      sel_mat[sel_mat != 0] <- 1
+    },
+    "all" = {
+      sel_mat <- 1
+    },
+    "rtw-all" = {
+      sel_mat <- 1
+      block_sampling <- tmp$dim[["m"]]
+    },
+    "rtw-comp" = {
+      pos <- seq(
+        tmp$dim[["na"]],
+        by = tmp$dim[["n"]],
+        length.out = tmp$dim[["p"]]
+      )
+      sel_mat <- Matrix::bandSparse(
+        tmp$dim[["nb"]],
+        tmp$dim[["n"]] * tmp$dim[["p"]],
+        pos
+      )
+      sel_mat <- 1 * t(sel_mat)
+      sel_mat[1:tmp$dim[["n"]], ] <- 1
+      block_sampling <- tmp$dim[["m"]]
+    },
+    {
+      cli_abort("Unknown {.arg features} option.", call = NULL)
+    }
+  )
+  attr(sel_mat, "sel_method") <- features
+
+  obj <- rml(
+    base = NULL,
+    hat = hat,
+    obs = obs,
+    sel_mat = sel_mat,
+    approach = approach,
+    params = params,
+    fit = NULL,
+    tuning = tuning,
+    block_sampling = block_sampling
+  )
+
+  obj <- new_rml_fit(
+    fit = obj$fit,
+    agg_mat = agg_mat,
+    agg_order = agg_order,
+    tew = tew,
+    sel_mat = obj$sel_mat,
+    approach = approach,
+    framework = "ct",
+    features = features,
+    features_size = NCOL(hat),
+    block_sampling = block_sampling
+  )
+  return(obj)
 }
