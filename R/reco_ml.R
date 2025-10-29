@@ -28,10 +28,6 @@ rml <- function(
   }
 
   if (is.null(fit)) {
-    if (any(is.na(hat))) {
-      hat <- na.omit(hat)
-      obs <- obs[-attr(hat, "na.action"), ]
-    }
     hat <- unname(hat)
     hat <- as.data.frame(hat)
     obs <- unname(obs)
@@ -63,6 +59,22 @@ rml <- function(
       y <- obs[, i]
       X <- hat[, id, drop = FALSE]
       fit_i <- NULL
+
+      X <- na.omit(X)
+      if (length(attr(X, "na.action")) > 0) {
+        if (NROW(X) == 0) {
+          cli_abort(
+            paste0(
+              "All the predictor variables for series {.val {i}} contain ",
+              "{.code NA} values after applying {.fn na.omit}. ",
+              "Please check your {.arg hat} input or consider using ",
+              "another {.arg features} option."
+            ),
+            call = NULL
+          )
+        }
+        y <- y[-attr(X, "na.action")]
+      }
     } else {
       y <- X <- NULL
       fit_i <- fit$fit[[i]]
