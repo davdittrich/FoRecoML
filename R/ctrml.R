@@ -346,6 +346,18 @@ ctrml <- function(
       }
     )
     attr(sel_mat, "sel_method") <- features
+
+    # Remove NA variables from sel_mat
+    na_var <- colSums(is.na(hat)) >= 0.75 * NROW(hat)
+    if (NCOL(sel_mat) == 1) {
+      if (length(sel_mat) == 1) {
+        sel_mat <- rep(sel_mat, NCOL(hat))
+      }
+      sel_mat[na_var] <- 0
+      sel_mat <- as(sel_mat, "sparseVector")
+    } else {
+      sel_mat[na_var, ] <- 0
+    }
   } else {
     if (!inherits(fit, "rml_fit")) {
       cli_abort("Incorrect {.arg fit} object.", call = NULL)
@@ -589,6 +601,18 @@ ctrml_fit <- function(
     }
   )
   attr(sel_mat, "sel_method") <- features
+
+  # Remove NA variables from sel_mat
+  na_var <- colSums(is.na(hat)) >= 0.75 * NROW(hat)
+  if (NCOL(sel_mat) == 1) {
+    if (length(sel_mat) == 1) {
+      sel_mat <- rep(sel_mat, NCOL(hat))
+    }
+    sel_mat[na_var] <- 0
+    sel_mat <- as(sel_mat, "sparseVector")
+  } else {
+    sel_mat[na_var, ] <- 0
+  }
 
   obj <- rml(
     base = NULL,
