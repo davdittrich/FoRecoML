@@ -6,12 +6,12 @@
 \title{Temporal Reconciliation with Machine Learning}
 \usage{
 # Reconciled forecasts
-terml(base, hat, obs, agg_order, tew = "sum", features = "rtw",
+terml(base, hat, obs, agg_order, tew = "sum", features = "all",
       approach = "randomForest", params = NULL, tuning = NULL,
       fit = NULL, sntz = FALSE, round = FALSE)
 
 # Pre-trained reconciled ML models
-terml_fit(hat, obs, agg_order, tew = "sum", features = "rtw",
+terml_fit(hat, obs, agg_order, tew = "sum", features = "all",
           approach = "randomForest", params = NULL, tuning = NULL)
 }
 \arguments{
@@ -41,8 +41,8 @@ include: "\code{sum}" (simple summation, \emph{default}), "\code{avg}"
 (last value of the period).}
 
 \item{features}{Character string specifying which features are used for
-model training. Options include "\code{rtw}" (see Rombouts et al. 2025,
-\emph{default}) and "\code{rtw-top}" (only the lowest- and
+model training. Options include "\code{all}" (see Rombouts et al. 2025,
+\emph{default}) and "\code{low-high}" (only the lowest- and
 highest-frequency base forecasts as features).}
 
 \item{approach}{Character string specifying the machine learning method used
@@ -135,11 +135,11 @@ base <- rnorm(sum(te_fh)*h, rep(te_set*bts_mean,  h*te_fh))
 ##########################################################################
 # XGBoost Reconciliation (xgboost pkg)
 reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-              approach = "xgboost", features = "rtw")
+              approach = "xgboost")
 
 # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
 reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-              approach = "xgboost", features = "rtw",
+              approach = "xgboost",
               params =  list(
                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
                 max_depth = 6, gamma = 0, subsample = 1,
@@ -149,18 +149,18 @@ reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
 
 # LightGBM Reconciliation (lightgbm pkg)
 reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-              approach = "lightgbm", features = "rtw")
+              approach = "lightgbm")
 
 # Random Forest Reconciliation (randomForest pkg)
 reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-              approach = "randomForest", features = "rtw")
+              approach = "randomForest")
 
 # Using the mlr3 pkg:
 # With 'params = list(.key = mlr_learners)' we can specify different
 # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
 # "regr.xgboost" for XGBoost, and others.
 reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-              approach = "mlr3", features = "rtw",
+              approach = "mlr3",
               # choose mlr3 learner (here Random Forest via ranger)
               params = list(.key = "regr.ranger"))
 
@@ -172,7 +172,7 @@ reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
 #   lgr::get_logger("bbotk")$set_threshold("warn")
 # }
 reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-              approach = "mlr3", features = "rtw",
+              approach = "mlr3",
               params = list(
                 .key = "regr.ranger",
                 # number of features tried at each split
@@ -188,11 +188,11 @@ reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
 ##########################################################################
 # Pre-trained machine learning models (e.g., omit the base param)
 mdl <- terml_fit(hat = hat, obs = obs, agg_order = m,
-                 approach = "lightgbm", features = "rtw")
+                 approach = "lightgbm")
 
 # Pre-trained machine learning models with base param
 reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-              approach = "lightgbm", features = "rtw")
+              approach = "lightgbm")
 mdl2 <- extract_reconciled_ml(reco)
 
 # New base forecasts matrix

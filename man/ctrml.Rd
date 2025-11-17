@@ -6,12 +6,12 @@
 \title{Cross-temporal Reconciliation with Machine Learning}
 \usage{
 # Reconciled forecasts
-ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "rtw-all",
+ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
       approach = "randomForest", params = NULL, tuning = NULL,
       fit = NULL, sntz = FALSE, round = FALSE)
 
 # Pre-trained reconciled ML models
-ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "rtw-all",
+ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
           approach = "randomForest", params = NULL, tuning = NULL)
 }
 \arguments{
@@ -50,8 +50,8 @@ include: "\code{sum}" (simple summation, \emph{default}), "\code{avg}"
 (last value of the period).}
 
 \item{features}{Character string specifying which features are used for model
-training. Options include "\code{rtw-all}" (see Rombouts et al. 2025), and
-"\code{rtw-comp}" (see Rombouts et al. 2025, \emph{default}).}
+training. Options include "\code{all}" (see Rombouts et al. 2025), and
+"\code{compact}" (see Rombouts et al. 2025, \emph{default}).}
 
 \item{approach}{Character string specifying the machine learning method used
 for reconciliation. Options are:
@@ -167,11 +167,11 @@ rownames(base) <- c("A", "B", "C")
 ##########################################################################
 # XGBoost Reconciliation (xgboost pkg)
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "xgboost", features = "rtw-all")
+              agg_mat = agg_mat, approach = "xgboost")
 
 # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "xgboost", features = "rtw-all",
+              agg_mat = agg_mat, approach = "xgboost",
               params =  list(
                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
                 max_depth = 6, gamma = 0, subsample = 1,
@@ -181,20 +181,18 @@ reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
 
 # LightGBM Reconciliation (lightgbm pkg)
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "lightgbm",
-              features = "rtw-all")
+              agg_mat = agg_mat, approach = "lightgbm")
 
 # Random Forest Reconciliation (randomForest pkg)
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "randomForest",
-              features = "rtw-all")
+              agg_mat = agg_mat, approach = "randomForest")
 
 # Using the mlr3 pkg:
 # With 'params = list(.key = mlr_learners)' we can specify different
 # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
 # "regr.xgboost" for XGBoost, and others.
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
+              agg_mat = agg_mat, approach = "mlr3",
               # choose mlr3 learner (here Random Forest via ranger)
               params = list(.key = "regr.ranger"))
 \donttest{
@@ -205,7 +203,7 @@ reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
 #   lgr::get_logger("bbotk")$set_threshold("warn")
 # }
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
+              agg_mat = agg_mat, approach = "mlr3",
               params = list(
                 .key = "regr.ranger",
                 # number of features tried at each split
@@ -221,11 +219,11 @@ reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
 ##########################################################################
 # Pre-trained machine learning models (e.g., omit the base param)
 mdl <- ctrml_fit(hat = hat, obs = obs, agg_order = m, agg_mat = agg_mat,
-                 approach = "xgboost", features = "rtw-all")
+                 approach = "xgboost")
 
 # Pre-trained machine learning models with base param
 reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-              agg_mat = agg_mat, approach = "xgboost", features = "rtw-all")
+              agg_mat = agg_mat, approach = "xgboost")
 mdl2 <- extract_reconciled_ml(reco)
 
 # New base forecasts matrix

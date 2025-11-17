@@ -13,7 +13,7 @@
 #'
 #' @usage
 #' # Reconciled forecasts
-#' ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "rtw-all",
+#' ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
 #'       approach = "randomForest", params = NULL, tuning = NULL,
 #'       fit = NULL, sntz = FALSE, round = FALSE)
 #'
@@ -36,8 +36,8 @@
 #'   total number of high-frequency bottom variables. These values are used to
 #'   train the ML approach.
 #' @param features Character string specifying which features are used for model
-#'   training. Options include "\code{rtw-all}" (see Rombouts et al. 2025), and
-#'   "\code{rtw-comp}" (see Rombouts et al. 2025, \emph{default}).
+#'   training. Options include "\code{all}" (see Rombouts et al. 2025), and
+#'   "\code{compact}" (see Rombouts et al. 2025, \emph{default}).
 #' @param fit A pre-trained ML reconciliation model (see,
 #'   [extract_reconciled_ml]). If supplied, training data (\code{hat},
 #'   \code{obs}) are not required.
@@ -144,11 +144,11 @@
 #' ##########################################################################
 #' # XGBoost Reconciliation (xgboost pkg)
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "xgboost", features = "rtw-all")
+#'               agg_mat = agg_mat, approach = "xgboost")
 #'
 #' # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "xgboost", features = "rtw-all",
+#'               agg_mat = agg_mat, approach = "xgboost",
 #'               params =  list(
 #'                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
 #'                 max_depth = 6, gamma = 0, subsample = 1,
@@ -158,20 +158,18 @@
 #'
 #' # LightGBM Reconciliation (lightgbm pkg)
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "lightgbm",
-#'               features = "rtw-all")
+#'               agg_mat = agg_mat, approach = "lightgbm")
 #'
 #' # Random Forest Reconciliation (randomForest pkg)
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "randomForest",
-#'               features = "rtw-all")
+#'               agg_mat = agg_mat, approach = "randomForest")
 #'
 #' # Using the mlr3 pkg:
 #' # With 'params = list(.key = mlr_learners)' we can specify different
 #' # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
 #' # "regr.xgboost" for XGBoost, and others.
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
+#'               agg_mat = agg_mat, approach = "mlr3",
 #'               # choose mlr3 learner (here Random Forest via ranger)
 #'               params = list(.key = "regr.ranger"))
 #' \donttest{
@@ -182,7 +180,7 @@
 #' #   lgr::get_logger("bbotk")$set_threshold("warn")
 #' # }
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "mlr3", features = "rtw-all",
+#'               agg_mat = agg_mat, approach = "mlr3",
 #'               params = list(
 #'                 .key = "regr.ranger",
 #'                 # number of features tried at each split
@@ -198,11 +196,11 @@
 #' ##########################################################################
 #' # Pre-trained machine learning models (e.g., omit the base param)
 #' mdl <- ctrml_fit(hat = hat, obs = obs, agg_order = m, agg_mat = agg_mat,
-#'                  approach = "xgboost", features = "rtw-all")
+#'                  approach = "xgboost")
 #'
 #' # Pre-trained machine learning models with base param
 #' reco <- ctrml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               agg_mat = agg_mat, approach = "xgboost", features = "rtw-all")
+#'               agg_mat = agg_mat, approach = "xgboost")
 #' mdl2 <- extract_reconciled_ml(reco)
 #'
 #' # New base forecasts matrix
@@ -222,7 +220,7 @@ ctrml <- function(
   agg_mat,
   agg_order,
   tew = "sum",
-  features = "rtw-all",
+  features = "all",
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
@@ -256,7 +254,7 @@ ctrml <- function(
     } else if (NROW(obs) != tmp$dim[["nb"]]) {
       cli_abort("Incorrect {.arg obs} rows dimension.", call = NULL)
     } else {
-      if (grepl("rtw", features)) {
+      if (!grepl("mfh", features)) {
         obs <- t(obs)
       } else {
         obs <- matrix(
@@ -273,7 +271,7 @@ ctrml <- function(
     } else if (NROW(hat) != tmp$dim[["n"]]) {
       cli_abort("Incorrect {.arg hat} rows dimension.", call = NULL)
     } else {
-      if (grepl("rtw", features)) {
+      if (!grepl("mfh", features)) {
         hat <- input2rtw(hat, tmp$set)
       } else {
         h <- NCOL(hat) / tmp$dim[["kt"]]
@@ -284,19 +282,19 @@ ctrml <- function(
 
     switch(
       features,
-      "hfbts" = {
+      "mfh-hfbts" = {
         sel_mat <- as(id_hfbts, "sparseVector")
       },
-      "hfts" = {
+      "mfh-hfts" = {
         sel_mat <- as(rep(id_hfts, tmp$dim[["n"]]), "sparseVector")
       },
-      "bts" = {
+      "mfh-bts" = {
         sel_mat <- as(rep(id_bts, each = tmp$dim[["kt"]]), "sparseVector")
       },
-      "str" = {
+      "mfh-str" = {
         sel_mat <- 1 * (sel_mat != 0)
       },
-      "str-hfbts" = {
+      "mfh-str-hfbts" = {
         sel_mat <- 1 * (sel_mat != 0)
         sel_mat <- sel_mat +
           Matrix(
@@ -306,7 +304,7 @@ ctrml <- function(
           )
         sel_mat[sel_mat != 0] <- 1
       },
-      "str-bts" = {
+      "mfh-str-bts" = {
         sel_mat <- 1 * (sel_mat != 0)
         sel_mat <- sel_mat +
           Matrix(
@@ -319,14 +317,14 @@ ctrml <- function(
           )
         sel_mat[sel_mat != 0] <- 1
       },
-      "all" = {
+      "mfh-all" = {
         sel_mat <- 1
       },
-      "rtw-all" = {
+      "all" = {
         sel_mat <- 1
         block_sampling <- tmp$dim[["m"]]
       },
-      "rtw-comp" = {
+      "compact" = {
         pos <- seq(
           tmp$dim[["na"]],
           by = tmp$dim[["n"]],
@@ -349,14 +347,16 @@ ctrml <- function(
 
     # Remove NA variables from sel_mat
     na_var <- colSums(is.na(hat)) >= 0.75 * NROW(hat)
-    if (NCOL(sel_mat) == 1) {
-      if (length(sel_mat) == 1) {
-        sel_mat <- rep(sel_mat, NCOL(hat))
+    if (any(na_var)) {
+      if (NCOL(sel_mat) == 1) {
+        if (length(sel_mat) == 1) {
+          sel_mat <- rep(sel_mat, NCOL(hat))
+        }
+        sel_mat[na_var] <- 0
+        sel_mat <- as(sel_mat, "sparseVector")
+      } else {
+        sel_mat[na_var, ] <- 0
       }
-      sel_mat[na_var] <- 0
-      sel_mat <- as(sel_mat, "sparseVector")
-    } else {
-      sel_mat[na_var, ] <- 0
     }
   } else {
     if (!inherits(fit, "rml_fit")) {
@@ -394,7 +394,7 @@ ctrml <- function(
     cli_abort("Incorrect {.arg base} rows dimension.", call = NULL)
   } else {
     h <- NCOL(base) / tmp$dim[["kt"]]
-    if (grepl("rtw", features)) {
+    if (!grepl("mfh", features)) {
       base <- input2rtw(base, tmp$set)
     } else {
       # Calculate 'h' and 'base_hmat'
@@ -439,7 +439,7 @@ ctrml <- function(
     block_sampling = block_sampling
   )
   attr(reco_mat, "fit") <- NULL
-  if (!grepl("rtw", features)) {
+  if (!grepl("mfh", features)) {
     reco_mat <- matrix(as.vector(reco_mat), ncol = tmp$dim[["nb"]])
   }
 
@@ -466,7 +466,7 @@ ctrml <- function(
 
 #' @usage
 #' # Pre-trained reconciled ML models
-#' ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "rtw-all",
+#' ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
 #'           approach = "randomForest", params = NULL, tuning = NULL)
 #'
 #' @return
@@ -482,7 +482,7 @@ ctrml_fit <- function(
   agg_mat,
   agg_order,
   tew = "sum",
-  features = "rtw-all",
+  features = "all",
   approach = "randomForest",
   params = NULL,
   tuning = NULL
@@ -512,7 +512,7 @@ ctrml_fit <- function(
   } else if (NROW(obs) != tmp$dim[["nb"]]) {
     cli_abort("Incorrect {.arg obs} rows dimension.", call = NULL)
   } else {
-    if (grepl("rtw", features)) {
+    if (!grepl("mfh", features)) {
       obs <- t(obs)
     } else {
       obs <- matrix(
@@ -529,7 +529,7 @@ ctrml_fit <- function(
   } else if (NROW(hat) != tmp$dim[["n"]]) {
     cli_abort("Incorrect {.arg hat} rows dimension.", call = NULL)
   } else {
-    if (grepl("rtw", features)) {
+    if (!grepl("mfh", features)) {
       hat <- input2rtw(hat, tmp$set)
     } else {
       h <- NCOL(hat) / tmp$dim[["kt"]]
@@ -539,19 +539,19 @@ ctrml_fit <- function(
 
   switch(
     features,
-    "hfbts" = {
+    "mfh-hfbts" = {
       sel_mat <- as(id_hfbts, "sparseVector")
     },
-    "hfts" = {
+    "mfh-hfts" = {
       sel_mat <- as(rep(id_hfts, tmp$dim[["n"]]), "sparseVector")
     },
-    "bts" = {
+    "mfh-bts" = {
       sel_mat <- as(rep(id_bts, each = tmp$dim[["kt"]]), "sparseVector")
     },
-    "str" = {
+    "mfh-str" = {
       sel_mat <- 1 * (sel_mat != 0)
     },
-    "str-hfbts" = {
+    "mfh-str-hfbts" = {
       sel_mat <- 1 * (sel_mat != 0)
       sel_mat <- sel_mat +
         Matrix(
@@ -561,7 +561,7 @@ ctrml_fit <- function(
         )
       sel_mat[sel_mat != 0] <- 1
     },
-    "str-bts" = {
+    "mfh-str-bts" = {
       sel_mat <- 1 * (sel_mat != 0)
       sel_mat <- sel_mat +
         Matrix(
@@ -574,14 +574,14 @@ ctrml_fit <- function(
         )
       sel_mat[sel_mat != 0] <- 1
     },
-    "all" = {
+    "mfh-all" = {
       sel_mat <- 1
     },
-    "rtw-all" = {
+    "all" = {
       sel_mat <- 1
       block_sampling <- tmp$dim[["m"]]
     },
-    "rtw-comp" = {
+    "compact" = {
       pos <- seq(
         tmp$dim[["na"]],
         by = tmp$dim[["n"]],
@@ -604,14 +604,16 @@ ctrml_fit <- function(
 
   # Remove NA variables from sel_mat
   na_var <- colSums(is.na(hat)) >= 0.75 * NROW(hat)
-  if (NCOL(sel_mat) == 1) {
-    if (length(sel_mat) == 1) {
-      sel_mat <- rep(sel_mat, NCOL(hat))
+  if (any(na_var)) {
+    if (NCOL(sel_mat) == 1) {
+      if (length(sel_mat) == 1) {
+        sel_mat <- rep(sel_mat, NCOL(hat))
+      }
+      sel_mat[na_var] <- 0
+      sel_mat <- as(sel_mat, "sparseVector")
+    } else {
+      sel_mat[na_var, ] <- 0
     }
-    sel_mat[na_var] <- 0
-    sel_mat <- as(sel_mat, "sparseVector")
-  } else {
-    sel_mat[na_var, ] <- 0
   }
 
   obj <- rml(

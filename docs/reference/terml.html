@@ -60,12 +60,12 @@ forecasts are then derived by temporal bottom-up.</p>
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># Reconciled forecasts</span></span>
-<span><span class="fu">terml</span><span class="op">(</span><span class="va">base</span>, <span class="va">hat</span>, <span class="va">obs</span>, <span class="va">agg_order</span>, tew <span class="op">=</span> <span class="st">"sum"</span>, features <span class="op">=</span> <span class="st">"rtw"</span>,</span>
+<span><span class="fu">terml</span><span class="op">(</span><span class="va">base</span>, <span class="va">hat</span>, <span class="va">obs</span>, <span class="va">agg_order</span>, tew <span class="op">=</span> <span class="st">"sum"</span>, features <span class="op">=</span> <span class="st">"all"</span>,</span>
 <span>      approach <span class="op">=</span> <span class="st">"randomForest"</span>, params <span class="op">=</span> <span class="cn">NULL</span>, tuning <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>      fit <span class="op">=</span> <span class="cn">NULL</span>, sntz <span class="op">=</span> <span class="cn">FALSE</span>, round <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Pre-trained reconciled ML models</span></span>
-<span><span class="fu">terml_fit</span><span class="op">(</span><span class="va">hat</span>, <span class="va">obs</span>, <span class="va">agg_order</span>, tew <span class="op">=</span> <span class="st">"sum"</span>, features <span class="op">=</span> <span class="st">"rtw"</span>,</span>
+<span><span class="fu">terml_fit</span><span class="op">(</span><span class="va">hat</span>, <span class="va">obs</span>, <span class="va">agg_order</span>, tew <span class="op">=</span> <span class="st">"sum"</span>, features <span class="op">=</span> <span class="st">"all"</span>,</span>
 <span>          approach <span class="op">=</span> <span class="st">"randomForest"</span>, params <span class="op">=</span> <span class="cn">NULL</span>, tuning <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -110,8 +110,8 @@ include: "<code>sum</code>" (simple summation, <em>default</em>), "<code>avg</co
 
 <dt id="arg-features">features<a class="anchor" aria-label="anchor" href="#arg-features"></a></dt>
 <dd><p>Character string specifying which features are used for
-model training. Options include "<code>rtw</code>" (see Rombouts et al. 2025,
-<em>default</em>) and "<code>rtw-top</code>" (only the lowest- and
+model training. Options include "<code>all</code>" (see Rombouts et al. 2025,
+<em>default</em>) and "<code>low-high</code>" (only the lowest- and
 highest-frequency base forecasts as features).</p></dd>
 
 
@@ -221,11 +221,11 @@ reconciliation at digital platforms with machine learning.
 <span class="r-in"><span><span class="co">##########################################################################</span></span></span>
 <span class="r-in"><span><span class="co"># XGBoost Reconciliation (xgboost pkg)</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">terml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"xgboost"</span>, features <span class="op">=</span> <span class="st">"rtw"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"xgboost"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># XGBoost Reconciliation with Tweedie loss function (xgboost pkg)</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">terml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"xgboost"</span>, features <span class="op">=</span> <span class="st">"rtw"</span>,</span></span>
+<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"xgboost"</span>,</span></span>
 <span class="r-in"><span>              params <span class="op">=</span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>                eta <span class="op">=</span> <span class="fl">0.3</span>, colsample_bytree <span class="op">=</span> <span class="fl">1</span>, min_child_weight <span class="op">=</span> <span class="fl">1</span>,</span></span>
 <span class="r-in"><span>                max_depth <span class="op">=</span> <span class="fl">6</span>, gamma <span class="op">=</span> <span class="fl">0</span>, subsample <span class="op">=</span> <span class="fl">1</span>,</span></span>
@@ -235,18 +235,18 @@ reconciliation at digital platforms with machine learning.
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># LightGBM Reconciliation (lightgbm pkg)</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">terml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"lightgbm"</span>, features <span class="op">=</span> <span class="st">"rtw"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"lightgbm"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Random Forest Reconciliation (randomForest pkg)</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">terml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"randomForest"</span>, features <span class="op">=</span> <span class="st">"rtw"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"randomForest"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Using the mlr3 pkg:</span></span></span>
 <span class="r-in"><span><span class="co"># With 'params = list(.key = mlr_learners)' we can specify different</span></span></span>
 <span class="r-in"><span><span class="co"># mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,</span></span></span>
 <span class="r-in"><span><span class="co"># "regr.xgboost" for XGBoost, and others.</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">terml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"mlr3"</span>, features <span class="op">=</span> <span class="st">"rtw"</span>,</span></span>
+<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"mlr3"</span>,</span></span>
 <span class="r-in"><span>              <span class="co"># choose mlr3 learner (here Random Forest via ranger)</span></span></span>
 <span class="r-in"><span>              params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>.key <span class="op">=</span> <span class="st">"regr.ranger"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
@@ -258,7 +258,7 @@ reconciliation at digital platforms with machine learning.
 <span class="r-in"><span><span class="co">#   lgr::get_logger("bbotk")$set_threshold("warn")</span></span></span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">terml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"mlr3"</span>, features <span class="op">=</span> <span class="st">"rtw"</span>,</span></span>
+<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"mlr3"</span>,</span></span>
 <span class="r-in"><span>              params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>                .key <span class="op">=</span> <span class="st">"regr.ranger"</span>,</span></span>
 <span class="r-in"><span>                <span class="co"># number of features tried at each split</span></span></span>
@@ -268,17 +268,124 @@ reconciliation at digital platforms with machine learning.
 <span class="r-in"><span>                <span class="co"># stop after 10 evaluations</span></span></span>
 <span class="r-in"><span>                terminator <span class="op">=</span> <span class="fu">mlr3tuning</span><span class="fu">::</span><span class="fu"><a href="https://bbotk.mlr-org.com/reference/trm.html" class="external-link">trm</a></span><span class="op">(</span><span class="st">"evals"</span>, n_evals <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
 <span class="r-in"><span>              <span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>row names were found from a short variable and have been discarded</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.255] [bbotk] Starting to optimize 1 parameter(s) with '&lt;OptimizerBatchRandomSearch&gt;' and '&lt;TerminatorEvals&gt; [n_evals=10, k=0]'</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.260] [bbotk] Evaluating 2 configuration(s)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.262] [mlr3] Running benchmark with 10 resampling iterations</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.266] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.303] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.341] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.378] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.415] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.453] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.484] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.513] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.544] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.574] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.604] [mlr3] Finished benchmark</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.620] [bbotk] Result of batch 1:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.621] [bbotk]  mtry   regr.mse warnings errors runtime_learners</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.621] [bbotk]     2 0.07265884        0      0            0.157</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.621] [bbotk]     1 0.11440386        0      0            0.124</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.621] [bbotk]                                 uhash</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.621] [bbotk]  b3f2aaf8-0a49-4488-a098-2fb84a004521</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.621] [bbotk]  ad439ac5-ed8f-4108-bc59-4fdb0ccb5930</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.624] [bbotk] Evaluating 2 configuration(s)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.626] [mlr3] Running benchmark with 10 resampling iterations</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.630] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.665] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.700] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.735] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.770] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.804] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.842] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.869] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.899] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.929] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.960] [mlr3] Finished benchmark</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.979] [bbotk] Result of batch 2:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.980] [bbotk]  mtry   regr.mse warnings errors runtime_learners</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.980] [bbotk]     2 0.07280231        0      0            0.147</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.980] [bbotk]     1 0.11609004        0      0            0.121</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.980] [bbotk]                                 uhash</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.980] [bbotk]  7a478263-7a3d-43b8-a127-a2e322f1fef4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.980] [bbotk]  b001af9d-b4a1-40f5-9664-9e155fa83013</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.982] [bbotk] Evaluating 2 configuration(s)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.985] [mlr3] Running benchmark with 10 resampling iterations</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:37.989] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.026] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.059] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.094] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.126] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.159] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.193] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.226] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.258] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.299] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.334] [mlr3] Finished benchmark</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.351] [bbotk] Result of batch 3:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.353] [bbotk]  mtry   regr.mse warnings errors runtime_learners</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.353] [bbotk]     2 0.07380894        0      0            0.141</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.353] [bbotk]     2 0.07276028        0      0            0.146</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.353] [bbotk]                                 uhash</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.353] [bbotk]  4b1f8cb8-2a7a-4ed1-810d-bf382672c6a3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.353] [bbotk]  2ec6b671-ca2e-4b02-ba05-111cdd578897</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.355] [bbotk] Evaluating 2 configuration(s)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.358] [mlr3] Running benchmark with 10 resampling iterations</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.362] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.391] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.421] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.451] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.481] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.513] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.545] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.578] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.614] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.648] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.683] [mlr3] Finished benchmark</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.699] [bbotk] Result of batch 4:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.700] [bbotk]  mtry   regr.mse warnings errors runtime_learners</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.700] [bbotk]     1 0.11805974        0      0            0.123</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.700] [bbotk]     2 0.07332363        0      0            0.140</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.700] [bbotk]                                 uhash</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.700] [bbotk]  3be910e8-6c99-4e3d-a732-13aa645dea92</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.700] [bbotk]  46824772-b22b-40c7-9dca-1e767f4324ab</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.703] [bbotk] Evaluating 2 configuration(s)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.706] [mlr3] Running benchmark with 10 resampling iterations</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.709] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.739] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.768] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.804] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.832] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.861] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 1/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.893] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 2/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.928] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 3/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.962] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 4/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:38.997] [mlr3] Applying learner 'regr.ranger' on task 'tsk_i' (iter 5/5)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.031] [mlr3] Finished benchmark</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.048] [bbotk] Result of batch 5:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.049] [bbotk]  mtry   regr.mse warnings errors runtime_learners</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.049] [bbotk]     1 0.11241548        0      0            0.122</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.049] [bbotk]     2 0.07003126        0      0            0.143</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.049] [bbotk]                                 uhash</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.049] [bbotk]  6f4e7d53-46c9-44c0-953d-d0ed8f8550e3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.049] [bbotk]  fa08689f-2be8-4d33-8690-5b6798701629</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.056] [bbotk] Finished optimizing after 10 evaluation(s)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.056] [bbotk] Result:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.057] [bbotk]   mtry learner_param_vals  x_domain   regr.mse</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.057] [bbotk]  &lt;int&gt;             &lt;list&gt;    &lt;list&gt;      &lt;num&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> INFO  [17:13:39.057] [bbotk]      2          &lt;list[2]&gt; &lt;list[1]&gt; 0.07003126</span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 <span class="r-in"><span><span class="co">##########################################################################</span></span></span>
 <span class="r-in"><span><span class="co"># Usage with pre-trained models</span></span></span>
 <span class="r-in"><span><span class="co">##########################################################################</span></span></span>
 <span class="r-in"><span><span class="co"># Pre-trained machine learning models (e.g., omit the base param)</span></span></span>
 <span class="r-in"><span><span class="va">mdl</span> <span class="op">&lt;-</span> <span class="fu">terml_fit</span><span class="op">(</span>hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>                 approach <span class="op">=</span> <span class="st">"lightgbm"</span>, features <span class="op">=</span> <span class="st">"rtw"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>                 approach <span class="op">=</span> <span class="st">"lightgbm"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Pre-trained machine learning models with base param</span></span></span>
 <span class="r-in"><span><span class="va">reco</span> <span class="op">&lt;-</span> <span class="fu">terml</span><span class="op">(</span>base <span class="op">=</span> <span class="va">base</span>, hat <span class="op">=</span> <span class="va">hat</span>, obs <span class="op">=</span> <span class="va">obs</span>, agg_order <span class="op">=</span> <span class="va">m</span>,</span></span>
-<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"lightgbm"</span>, features <span class="op">=</span> <span class="st">"rtw"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>              approach <span class="op">=</span> <span class="st">"lightgbm"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">mdl2</span> <span class="op">&lt;-</span> <span class="fu"><a href="extract_reconciled_ml.html">extract_reconciled_ml</a></span><span class="op">(</span><span class="va">reco</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># New base forecasts matrix</span></span></span>

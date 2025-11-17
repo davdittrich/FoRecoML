@@ -9,7 +9,7 @@
 #'
 #' @usage
 #' # Reconciled forecasts
-#' terml(base, hat, obs, agg_order, tew = "sum", features = "rtw",
+#' terml(base, hat, obs, agg_order, tew = "sum", features = "all",
 #'       approach = "randomForest", params = NULL, tuning = NULL,
 #'       fit = NULL, sntz = FALSE, round = FALSE)
 #'
@@ -27,8 +27,8 @@
 #'   for the highest frequency series (\eqn{k = 1}). These values are used to
 #'   train the ML approach.
 #' @param features Character string specifying which features are used for
-#'   model training. Options include "\code{rtw}" (see Rombouts et al. 2025,
-#'   \emph{default}) and "\code{rtw-top}" (only the lowest- and
+#'   model training. Options include "\code{all}" (see Rombouts et al. 2025,
+#'   \emph{default}) and "\code{low-high}" (only the lowest- and
 #'   highest-frequency base forecasts as features).
 #'
 #' @inheritParams ctrml
@@ -85,11 +85,11 @@
 #' ##########################################################################
 #' # XGBoost Reconciliation (xgboost pkg)
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "xgboost", features = "rtw")
+#'               approach = "xgboost")
 #'
 #' # XGBoost Reconciliation with Tweedie loss function (xgboost pkg)
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "xgboost", features = "rtw",
+#'               approach = "xgboost",
 #'               params =  list(
 #'                 eta = 0.3, colsample_bytree = 1, min_child_weight = 1,
 #'                 max_depth = 6, gamma = 0, subsample = 1,
@@ -99,18 +99,18 @@
 #'
 #' # LightGBM Reconciliation (lightgbm pkg)
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "lightgbm", features = "rtw")
+#'               approach = "lightgbm")
 #'
 #' # Random Forest Reconciliation (randomForest pkg)
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "randomForest", features = "rtw")
+#'               approach = "randomForest")
 #'
 #' # Using the mlr3 pkg:
 #' # With 'params = list(.key = mlr_learners)' we can specify different
 #' # mlr_learners implemented in mlr3 such as "regr.ranger" for Random Forest,
 #' # "regr.xgboost" for XGBoost, and others.
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "mlr3", features = "rtw",
+#'               approach = "mlr3",
 #'               # choose mlr3 learner (here Random Forest via ranger)
 #'               params = list(.key = "regr.ranger"))
 #'
@@ -122,7 +122,7 @@
 #' #   lgr::get_logger("bbotk")$set_threshold("warn")
 #' # }
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "mlr3", features = "rtw",
+#'               approach = "mlr3",
 #'               params = list(
 #'                 .key = "regr.ranger",
 #'                 # number of features tried at each split
@@ -138,11 +138,11 @@
 #' ##########################################################################
 #' # Pre-trained machine learning models (e.g., omit the base param)
 #' mdl <- terml_fit(hat = hat, obs = obs, agg_order = m,
-#'                  approach = "lightgbm", features = "rtw")
+#'                  approach = "lightgbm")
 #'
 #' # Pre-trained machine learning models with base param
 #' reco <- terml(base = base, hat = hat, obs = obs, agg_order = m,
-#'               approach = "lightgbm", features = "rtw")
+#'               approach = "lightgbm")
 #' mdl2 <- extract_reconciled_ml(reco)
 #'
 #' # New base forecasts matrix
@@ -156,7 +156,7 @@ terml <- function(
   obs,
   agg_order,
   tew = "sum",
-  features = "rtw",
+  features = "all",
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
@@ -190,7 +190,7 @@ terml <- function(
     } else if (length(obs) %% m != 0) {
       cli_abort("Incorrect {.arg obs} length.", call = NULL)
     } else {
-      if (grepl("rtw", features)) {
+      if (!grepl("mfh", features)) {
         obs <- cbind(obs)
       } else {
         obs <- matrix(obs, ncol = m, byrow = TRUE)
@@ -205,7 +205,7 @@ terml <- function(
     } else if (length(hat) %% kt != 0) {
       cli_abort("Incorrect {.arg hat} length.", call = NULL)
     } else {
-      if (grepl("rtw", features)) {
+      if (!grepl("mfh", features)) {
         hat <- input2rtw(hat, kset)
       } else {
         h_hat <- length(hat) / kt
@@ -216,28 +216,29 @@ terml <- function(
 
     switch(
       features,
-      "hfts" = {
+      "mfh-hfts" = {
         sel_mat <- as(id_hfts, "sparseVector")
       },
-      "str" = {
+      "mfh-str" = {
         sel_mat <- 1 * (strc_mat != 0)
       },
-      "str-hfts" = {
+      "mfh-str-hfts" = {
         sel_mat <- 1 * (strc_mat != 0)
         sel_mat <- sel_mat +
           Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
         sel_mat[sel_mat != 0] <- 1
       },
-      "all" = {
+      "mfh-all" = {
         sel_mat <- 1 #Matrix(1, nrow = kt, ncol = m, sparse = TRUE)
       },
-      "rtw" = {
+      "all" = {
         sel_mat <- 1
         block_sampling <- tmp$dim[["m"]]
       },
-      "rtw-top" = {
-        sel_mat <- as(id_hfts, "sparseVector")
-        sel_mat[1] <- 1
+      "low-high" = {
+        sel_mat <- rep(0, length(kset))
+        sel_mat[c(1, length(kset))] <- 1
+        sel_mat <- as(sel_mat, "sparseVector")
         block_sampling <- tmp$dim[["m"]]
       },
       {
@@ -248,14 +249,16 @@ terml <- function(
 
     # Remove NA variables from sel_mat
     na_var <- colSums(is.na(hat)) >= 0.75 * NROW(hat)
-    if (NCOL(sel_mat) == 1) {
-      if (length(sel_mat) == 1) {
-        sel_mat <- rep(sel_mat, NCOL(hat))
+    if (any(na_var)) {
+      if (NCOL(sel_mat) == 1) {
+        if (length(sel_mat) == 1) {
+          sel_mat <- rep(sel_mat, NCOL(hat))
+        }
+        sel_mat[na_var] <- 0
+        sel_mat <- as(sel_mat, "sparseVector")
+      } else {
+        sel_mat[na_var, ] <- 0
       }
-      sel_mat[na_var] <- 0
-      sel_mat <- as(sel_mat, "sparseVector")
-    } else {
-      sel_mat[na_var, ] <- 0
     }
   } else {
     if (!inherits(fit, "rml_fit")) {
@@ -290,7 +293,7 @@ terml <- function(
     cli_abort("Incorrect {.arg base} length.", call = NULL)
   } else {
     h <- length(base) / kt
-    if (grepl("rtw", features)) {
+    if (!grepl("mfh", features)) {
       base <- input2rtw(base, kset)
     } else {
       base <- vec2hmat(vec = base, h = h, kset = kset)
@@ -356,7 +359,7 @@ terml <- function(
 
 #' @usage
 #' # Pre-trained reconciled ML models
-#' terml_fit(hat, obs, agg_order, tew = "sum", features = "rtw",
+#' terml_fit(hat, obs, agg_order, tew = "sum", features = "all",
 #'           approach = "randomForest", params = NULL, tuning = NULL)
 #'
 #' @return
@@ -371,7 +374,7 @@ terml_fit <- function(
   obs,
   agg_order,
   tew = "sum",
-  features = "rtw",
+  features = "all",
   approach = "randomForest",
   params = NULL,
   tuning = NULL
@@ -399,7 +402,7 @@ terml_fit <- function(
   } else if (length(obs) %% m != 0) {
     cli_abort("Incorrect {.arg obs} length.", call = NULL)
   } else {
-    if (grepl("rtw", features)) {
+    if (!grepl("mfh", features)) {
       obs <- cbind(obs)
     } else {
       obs <- matrix(obs, ncol = m, byrow = TRUE)
@@ -411,7 +414,7 @@ terml_fit <- function(
   } else if (length(hat) %% kt != 0) {
     cli_abort("Incorrect {.arg hat} length.", call = NULL)
   } else {
-    if (grepl("rtw", features)) {
+    if (!grepl("mfh", features)) {
       hat <- input2rtw(hat, kset)
     } else {
       h <- length(hat) / kt
@@ -421,25 +424,25 @@ terml_fit <- function(
 
   switch(
     features,
-    "hfts" = {
+    "mfh-hfts" = {
       sel_mat <- as(id_hfts, "sparseVector")
     },
-    "str" = {
+    "mfh-str" = {
       sel_mat <- 1 * (strc_mat != 0)
     },
-    "str-hfts" = {
+    "mfh-str-hfts" = {
       sel_mat <- 1 * (strc_mat != 0)
       sel_mat <- sel_mat + Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
       sel_mat[sel_mat != 0] <- 1
     },
-    "all" = {
+    "mfh-all" = {
       sel_mat <- 1 #Matrix(1, nrow = kt, ncol = m, sparse = TRUE)
     },
-    "rtw" = {
+    "all" = {
       sel_mat <- 1
       block_sampling <- tmp$dim[["m"]]
     },
-    "rtw-top" = {
+    "low-high" = {
       sel_mat <- as(id_hfts, "sparseVector")
       sel_mat[1] <- 1
       block_sampling <- tmp$dim[["m"]]
@@ -452,14 +455,16 @@ terml_fit <- function(
 
   # Remove NA variables from sel_mat
   na_var <- colSums(is.na(hat)) >= 0.75 * NROW(hat)
-  if (NCOL(sel_mat) == 1) {
-    if (length(sel_mat) == 1) {
-      sel_mat <- rep(sel_mat, NCOL(hat))
+  if (any(na_var)) {
+    if (NCOL(sel_mat) == 1) {
+      if (length(sel_mat) == 1) {
+        sel_mat <- rep(sel_mat, NCOL(hat))
+      }
+      sel_mat[na_var] <- 0
+      sel_mat <- as(sel_mat, "sparseVector")
+    } else {
+      sel_mat[na_var, ] <- 0
     }
-    sel_mat[na_var] <- 0
-    sel_mat <- as(sel_mat, "sparseVector")
-  } else {
-    sel_mat[na_var, ] <- 0
   }
 
   obj <- rml(
