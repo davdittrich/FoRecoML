@@ -11,7 +11,7 @@
 #' # Reconciled forecasts
 #' terml(base, hat, obs, agg_order, tew = "sum", features = "all",
 #'       approach = "randomForest", params = NULL, tuning = NULL,
-#'       fit = NULL, sntz = FALSE, round = FALSE)
+#'       sntz = FALSE, round = FALSE, fit = NULL)
 #'
 #' @param base A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
 #'   base forecasts to be reconciled, ordered from lowest to highest frequency;
@@ -160,9 +160,9 @@ terml <- function(
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
-  fit = NULL,
   sntz = FALSE,
-  round = FALSE
+  round = FALSE,
+  fit = NULL
 ) {
   if (is.null(fit)) {
     if (missing(agg_order)) {

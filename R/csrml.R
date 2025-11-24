@@ -15,7 +15,7 @@
 #' @usage
 #' # Reconciled forecasts
 #' csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
-#'       params = NULL, tuning = NULL, fit = NULL, sntz = FALSE, round = FALSE)
+#'       params = NULL, tuning = NULL, sntz = FALSE, round = FALSE, fit = NULL)
 #'
 #' @param base A (\eqn{h \times n}) numeric matrix or multivariate time series
 #'   (\code{mts} class) containing the base forecasts to be reconciled; \eqn{h}
@@ -162,9 +162,9 @@ csrml <- function(
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
-  fit = NULL,
   sntz = FALSE,
-  round = FALSE
+  round = FALSE,
+  fit = NULL
 ) {
   if (is.null(fit)) {
     if (missing(agg_mat)) {

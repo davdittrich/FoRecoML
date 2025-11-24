@@ -76,7 +76,7 @@ framework described by Girolimetto and Di Fonzo (2024).</p>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># Reconciled forecasts</span></span>
 <span><span class="fu">csrml</span><span class="op">(</span><span class="va">base</span>, <span class="va">hat</span>, <span class="va">obs</span>, <span class="va">agg_mat</span>, features <span class="op">=</span> <span class="st">"all"</span>, approach <span class="op">=</span> <span class="st">"randomForest"</span>,</span>
-<span>      params <span class="op">=</span> <span class="cn">NULL</span>, tuning <span class="op">=</span> <span class="cn">NULL</span>, fit <span class="op">=</span> <span class="cn">NULL</span>, sntz <span class="op">=</span> <span class="cn">FALSE</span>, round <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span>      params <span class="op">=</span> <span class="cn">NULL</span>, tuning <span class="op">=</span> <span class="cn">NULL</span>, sntz <span class="op">=</span> <span class="cn">FALSE</span>, round <span class="op">=</span> <span class="cn">FALSE</span>, fit <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Pre-trained reconciled ML models</span></span>
 <span><span class="fu">csrml_fit</span><span class="op">(</span><span class="va">hat</span>, <span class="va">obs</span>, <span class="va">agg_mat</span>, features <span class="op">=</span> <span class="st">"all"</span>, approach <span class="op">=</span> <span class="st">"randomForest"</span>,</span>
@@ -149,12 +149,6 @@ format follows <a href="https://mlr3tuning.mlr-org.com/reference/auto_tuner.html
 through <code>params</code>.</p></dd>
 
 
-<dt id="arg-fit">fit<a class="anchor" aria-label="anchor" href="#arg-fit"></a></dt>
-<dd><p>A pre-trained ML reconciliation model (see,
-<a href="extract_reconciled_ml.html">extract_reconciled_ml</a>). If supplied, training data (<code>hat</code>,
-<code>obs</code>) are not required.</p></dd>
-
-
 <dt id="arg-sntz">sntz<a class="anchor" aria-label="anchor" href="#arg-sntz"></a></dt>
 <dd><p>Logical. If <code>TRUE</code>, enforces non-negativity on reconciled
 forecasts using the heuristic "set-negative-to-zero" (Di Fonzo and
@@ -165,6 +159,12 @@ Girolimetto, 2023). <em>Default</em> is <code>FALSE</code>.</p></dd>
 <dd><p>Logical. If <code>TRUE</code>, reconciled forecasts are rounded to
 integer values and coherence is ensured via a bottom-up adjustment.
 <em>Default</em> is <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-fit">fit<a class="anchor" aria-label="anchor" href="#arg-fit"></a></dt>
+<dd><p>A pre-trained ML reconciliation model (see,
+<a href="extract_reconciled_ml.html">extract_reconciled_ml</a>). If supplied, training data (<code>hat</code>,
+<code>obs</code>) are not required.</p></dd>
 
 </dl></div>
     <div class="section level2">

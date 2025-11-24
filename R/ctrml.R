@@ -15,7 +15,7 @@
 #' # Reconciled forecasts
 #' ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
 #'       approach = "randomForest", params = NULL, tuning = NULL,
-#'       fit = NULL, sntz = FALSE, round = FALSE)
+#'       sntz = FALSE, round = FALSE, fit = NULL)
 #'
 #' @param base A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
 #'   forecasts to be reconciled; \eqn{n} is the total number of variables,
@@ -224,9 +224,9 @@ ctrml <- function(
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
-  fit = NULL,
   sntz = FALSE,
-  round = FALSE
+  round = FALSE,
+  fit = NULL
 ) {
   if (is.null(fit)) {
     # Check if 'agg_order' is provided

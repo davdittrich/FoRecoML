@@ -8,7 +8,7 @@
 # Reconciled forecasts
 ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
       approach = "randomForest", params = NULL, tuning = NULL,
-      fit = NULL, sntz = FALSE, round = FALSE)
+      sntz = FALSE, round = FALSE, fit = NULL)
 
 # Pre-trained reconciled ML models
 ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
@@ -79,10 +79,6 @@ ML approach These may include algorithm-specific hyperparameters for
 format follows \link[mlr3tuning:auto_tuner]{mlr3tuning::auto_tuner}, except that the learner is set
 through \code{params}.}
 
-\item{fit}{A pre-trained ML reconciliation model (see,
-\link{extract_reconciled_ml}). If supplied, training data (\code{hat},
-\code{obs}) are not required.}
-
 \item{sntz}{Logical. If \code{TRUE}, enforces non-negativity on reconciled
 forecasts using the heuristic "set-negative-to-zero" (Di Fonzo and
 Girolimetto, 2023). \emph{Default} is \code{FALSE}.}
@@ -90,6 +86,10 @@ Girolimetto, 2023). \emph{Default} is \code{FALSE}.}
 \item{round}{Logical. If \code{TRUE}, reconciled forecasts are rounded to
 integer values and coherence is ensured via a bottom-up adjustment.
 \emph{Default} is \code{FALSE}.}
+
+\item{fit}{A pre-trained ML reconciliation model (see,
+\link{extract_reconciled_ml}). If supplied, training data (\code{hat},
+\code{obs}) are not required.}
 }
 \value{
 \itemize{
