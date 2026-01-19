@@ -15,12 +15,12 @@ terml_fit(hat, obs, agg_order, tew = "sum", features = "all",
           approach = "randomForest", params = NULL, tuning = NULL)
 }
 \arguments{
-\item{base}{A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
+\item{base}{A (\eqn{h(k^\ast + m) \times 1}) numeric vector containing the
 base forecasts to be reconciled, ordered from lowest to highest frequency;
-\eqn{N} is the training length for the lowest frequency time series,
-\eqn{m} is the maximum aggregation order, and \eqn{k^\ast} is the sum of a
+\eqn{m} is the maximum aggregation order, \eqn{k^\ast} is the sum of a
 chosen subset of the \eqn{p - 1} factors of \eqn{m} (excluding \eqn{m}
-itself).}
+itself) and \eqn{h} is the forecast horizon for the lowest frequency
+time series.}
 
 \item{hat}{A (\eqn{N(k^\ast + m) \times 1}) numeric vector containing the
 base forecasts ordered from lowest to highest frequency; \eqn{N} is the
