@@ -165,6 +165,7 @@ rml.mlr3 <- function(
       }
 
       if (!is.null(block_sampling)) {
+        rownames(X) <- NULL
         tsk_i <- cbind(y = y, X, id = rep(1:NROW(X), each = block_sampling))
         tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
         # tsk_i$encapsulate("evaluate", fallback = lrn("regr.featureless"))
