@@ -1,0 +1,86 @@
+# Extract the reconciled model from a reconciliation result
+
+Extract the fitted reconciled model(s) from a reconciliation function's
+output (e.g.,
+[csrml](https://danigiro.github.io/FoRecoML/reference/csrml.md),
+[terml](https://danigiro.github.io/FoRecoML/reference/terml.md) and
+[ctrml](https://danigiro.github.io/FoRecoML/reference/ctrml.md)). The
+model can be reused for forecast reconciliation in the reconciliation
+functions.
+
+## Usage
+
+``` r
+extract_reconciled_ml(reco)
+```
+
+## Arguments
+
+- reco:
+
+  An object returned by a reconciliation function (e.g., the result of
+  [csrml](https://danigiro.github.io/FoRecoML/reference/csrml.md),
+  [terml](https://danigiro.github.io/FoRecoML/reference/terml.md) and
+  [ctrml](https://danigiro.github.io/FoRecoML/reference/ctrml.md)).
+
+## Value
+
+A named list with reconciliation information:
+
+- `sel_mat`:
+
+  Features used (e.g., the selected feature matrix or indices).
+
+- `fit`:
+
+  List of reconciled models.
+
+- `approach`:
+
+  The learning approach used (e.g., `"xgboost"`, `"lightgbm"`,
+  `"randomForest"`, `"mlr3"`).
+
+## Examples
+
+``` r
+# agg_mat: simple aggregation matrix, A = B + C
+agg_mat <- t(c(1,1))
+dimnames(agg_mat) <- list("A", c("B", "C"))
+
+# N_hat: dimension for the most aggregated training set
+N_hat <- 100
+
+# ts_mean: mean for the Normal draws used to simulate data
+ts_mean <- c(20, 10, 10)
+
+# hat: a training (base forecasts) feautures matrix
+hat <- matrix(
+  rnorm(length(ts_mean)*N_hat, mean = ts_mean),
+  N_hat, byrow = TRUE)
+colnames(hat) <- unlist(dimnames(agg_mat))
+
+# obs: (observed) values for bottom-level series (B, C)
+obs <- matrix(
+  rnorm(length(ts_mean[-1])*N_hat, mean = ts_mean[-1]),
+  N_hat, byrow = TRUE)
+colnames(obs) <- colnames(agg_mat)
+
+# h: base forecast horizon
+h <- 2
+
+# base: base forecasts matrix
+base <- matrix(
+  rnorm(length(ts_mean)*h, mean = ts_mean),
+  h, byrow = TRUE)
+colnames(base) <- unlist(dimnames(agg_mat))
+# `reco` is the result of a reconciliation call:
+reco <- csrml(base = base, hat = hat, obs = obs, agg_mat = agg_mat)
+
+mdl <- extract_reconciled_ml(reco)
+mdl
+#> ----- Reconciled models -----
+#> Framework: cs 
+#> Features: all 
+#> Approach: randomForest 
+#>   Models: 2 
+```
