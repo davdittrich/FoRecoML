@@ -46,6 +46,5 @@ RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
 URL: https://github.com/danigiro/FoRecoML, https://danigiro.github.io/FoRecoML
 BugReports: https://github.com/danigiro/FoRecoML/issues
-Suggests: 
-    testthat (>= 3.0.0)
+Suggests: testthat (>= 3.0.0), ranger
 Config/testthat/edition: 3

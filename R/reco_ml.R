@@ -130,7 +130,6 @@ rml.mlr3 <- function(
   block_sampling = NULL,
   ...
 ) {
-  requireNamespace("mlr3learners", quietly = TRUE)
   if (is.null(fit)) {
     if (is.null(y) && is.null(X)) {
       cli_abort(
