@@ -7,3 +7,7 @@
 
 /.quarto/
 **/*.quarto_ipynb
+
+cran-comments.md
+
+CRAN-SUBMISSION

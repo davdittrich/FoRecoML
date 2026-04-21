@@ -12,7 +12,7 @@ Nonlinear forecast reconciliation with machine learning in cross-sectional (Spil
 Useful links:
 \itemize{
   \item \url{https://github.com/danigiro/FoRecoML}
-  \item \url{https://danigiro.github.io/FoRecoML}
+  \item \url{https://danigiro.github.io/FoRecoML/}
   \item Report bugs at \url{https://github.com/danigiro/FoRecoML/issues}
 }
 

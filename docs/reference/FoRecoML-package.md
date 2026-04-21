@@ -13,7 +13,7 @@ Useful links:
 
 - <https://github.com/danigiro/FoRecoML>
 
-- <https://danigiro.github.io/FoRecoML>
+- <https://danigiro.github.io/FoRecoML/>
 
 - Report bugs at <https://github.com/danigiro/FoRecoML/issues>
 
