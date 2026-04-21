@@ -1,8 +1,8 @@
-pandoc: '3.8'
+pandoc: 3.8.3
 pkgdown: 2.2.0
 pkgdown_sha: ~
 articles: {}
-last_built: 2026-04-14T19:05Z
+last_built: 2026-04-21T16:20Z
 urls:
   reference: https://danigiro.github.io/FoRecoML/reference
   article: https://danigiro.github.io/FoRecoML/articles

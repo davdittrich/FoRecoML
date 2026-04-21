@@ -18,13 +18,13 @@ Source:
 [`DESCRIPTION`](https://github.com/danigiro/FoRecoML/blob/HEAD/DESCRIPTION)
 
 Girolimetto D, Yang Y, Rombouts J, Wilms I (2026). *FoRecoML: Forecast
-Reconciliation with Machine Learning*. R package version 1.0.0,
+Reconciliation with Machine Learning*. R package version 1.0.0.9000,
 <https://github.com/danigiro/FoRecoML>.
 
     @Manual{,
       title = {FoRecoML: Forecast Reconciliation with Machine Learning},
       author = {Daniele Girolimetto and Yangzhuoran Fin Yang and Jeroen Rombouts and Ines Wilms},
       year = {2026},
-      note = {R package version 1.0.0},
+      note = {R package version 1.0.0.9000},
       url = {https://github.com/danigiro/FoRecoML},
     }
