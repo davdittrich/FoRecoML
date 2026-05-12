@@ -220,11 +220,7 @@ csrml <- function(
     attr(sel_mat, "sel_method") <- features
 
     # Remove NA variables from sel_mat
-    na_var <- vapply(
-      seq_len(NCOL(hat)),
-      function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
-      logical(1)
-    )
+    na_var <- na_col_mask(hat)
     if (any(na_var)) {
       if (NCOL(sel_mat) == 1) {
         if (length(sel_mat) == 1) {
@@ -370,11 +366,7 @@ csrml_fit <- function(
   attr(sel_mat, "sel_method") <- features
 
   # Remove NA variables from sel_mat
-  na_var <- vapply(
-    seq_len(NCOL(hat)),
-    function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
-    logical(1)
-  )
+  na_var <- na_col_mask(hat)
   if (any(na_var)) {
     if (NCOL(sel_mat) == 1) {
       if (length(sel_mat) == 1) {

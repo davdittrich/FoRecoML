@@ -260,11 +260,7 @@ terml <- function(
     }
 
     # Remove NA variables from sel_mat (slice-first aware).
-    na_local <- vapply(
-      seq_len(NCOL(hat)),
-      function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
-      logical(1)
-    )
+    na_local <- na_col_mask(hat)
     if (any(na_local)) {
       if (is.null(keep_cols)) {
         if (NCOL(sel_mat) == 1) {
@@ -506,11 +502,7 @@ terml_fit <- function(
   }
 
   # Remove NA variables from sel_mat (slice-first aware).
-  na_local <- vapply(
-    seq_len(NCOL(hat)),
-    function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
-    logical(1)
-  )
+  na_local <- na_col_mask(hat)
   if (any(na_local)) {
     if (is.null(keep_cols)) {
       if (NCOL(sel_mat) == 1) {
