@@ -54,7 +54,8 @@ rml <- function(
   }
 
   if (!is.null(base)) {
-    base <- unname(base)
+    if (!is.null(names(base))) names(base) <- NULL
+    if (!is.null(dimnames(base))) dimnames(base) <- NULL
   }
 
   # T4/T5: precompute keep_cols + col_map once before lapply.
