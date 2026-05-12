@@ -161,11 +161,10 @@ rml <- function(
     }
   }
 
-  ml_step <- do.call("rbind", out)
   if (is.null(fit)) {
     fit <- NULL
     fit$sel_mat <- sel_mat
-    fit$fit <- do.call("list", ml_step[, "fit"])
+    fit$fit <- lapply(out, `[[`, "fit")
     # T6 — stash approach + checkpoint_dir so the outer entry point can pass
     # them through to new_rml_fit() (predict reuse needs `approach` for the
     # serializer dispatch in get_fit_i()).
@@ -176,10 +175,12 @@ rml <- function(
 
   if (!is.null(base)) {
     # Point reconciled forecasts
-    bts <- do.call("cbind", ml_step[, "bts"])
+    bts <- do.call(cbind, lapply(out, `[[`, "bts"))
+    rm(out)
     attr(bts, "fit") <- fit
     return(bts)
   } else {
+    rm(out)
     return(fit)
   }
 }
