@@ -354,18 +354,26 @@ ctrml <- function(
         block_sampling <- tmp$dim[["m"]]
       },
       "compact" = {
-        pos <- seq(
-          tmp$dim[["na"]],
-          by = tmp$dim[["n"]],
-          length.out = tmp$dim[["p"]]
+        n_  <- tmp$dim[["n"]]
+        nb_ <- tmp$dim[["nb"]]
+        na_ <- tmp$dim[["na"]]
+        p_  <- tmp$dim[["p"]]
+        i_top <- rep(seq_len(n_), times = nb_)
+        j_top <- rep(seq_len(nb_), each = n_)
+        if (p_ > 1) {
+          row_offsets <- seq(from = na_ + n_, by = n_, length.out = p_ - 1)
+          i_band <- as.vector(outer(seq_len(nb_), row_offsets, `+`))
+          j_band <- rep(seq_len(nb_), times = p_ - 1)
+        } else {
+          i_band <- integer(0)
+          j_band <- integer(0)
+        }
+        sel_mat <- Matrix::sparseMatrix(
+          i = c(i_top, i_band),
+          j = c(j_top, j_band),
+          x = 1,
+          dims = c(n_ * p_, nb_)
         )
-        sel_mat <- Matrix::bandSparse(
-          tmp$dim[["nb"]],
-          tmp$dim[["n"]] * tmp$dim[["p"]],
-          pos
-        )
-        sel_mat <- 1 * t(sel_mat)
-        sel_mat[1:tmp$dim[["n"]], ] <- 1
         block_sampling <- tmp$dim[["m"]]
       },
       {
@@ -656,18 +664,26 @@ ctrml_fit <- function(
       block_sampling <- tmp$dim[["m"]]
     },
     "compact" = {
-      pos <- seq(
-        tmp$dim[["na"]],
-        by = tmp$dim[["n"]],
-        length.out = tmp$dim[["p"]]
+      n_  <- tmp$dim[["n"]]
+      nb_ <- tmp$dim[["nb"]]
+      na_ <- tmp$dim[["na"]]
+      p_  <- tmp$dim[["p"]]
+      i_top <- rep(seq_len(n_), times = nb_)
+      j_top <- rep(seq_len(nb_), each = n_)
+      if (p_ > 1) {
+        row_offsets <- seq(from = na_ + n_, by = n_, length.out = p_ - 1)
+        i_band <- as.vector(outer(seq_len(nb_), row_offsets, `+`))
+        j_band <- rep(seq_len(nb_), times = p_ - 1)
+      } else {
+        i_band <- integer(0)
+        j_band <- integer(0)
+      }
+      sel_mat <- Matrix::sparseMatrix(
+        i = c(i_top, i_band),
+        j = c(j_top, j_band),
+        x = 1,
+        dims = c(n_ * p_, nb_)
       )
-      sel_mat <- Matrix::bandSparse(
-        tmp$dim[["nb"]],
-        tmp$dim[["n"]] * tmp$dim[["p"]],
-        pos
-      )
-      sel_mat <- 1 * t(sel_mat)
-      sel_mat[1:tmp$dim[["n"]], ] <- 1
       block_sampling <- tmp$dim[["m"]]
     },
     {
