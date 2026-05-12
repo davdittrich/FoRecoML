@@ -214,8 +214,21 @@ rml.mlr3 <- function(
     }
 
     params$.key <- ifelse(is.null(params$.key), "regr.ranger", params$.key)
-    tsk_i <- data.frame(y = y, X, check.names = FALSE)
-    tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
+
+    if (!is.null(block_sampling) && !is.null(tuning)) {
+      tsk_i <- data.frame(
+        y = y, X,
+        id = rep(seq_len(NROW(X)), each = block_sampling),
+        check.names = FALSE
+      )
+      tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
+      tsk_i$col_roles$group <- "id"
+      tsk_i$col_roles$feature <- setdiff(tsk_i$col_roles$feature, "id")
+    } else {
+      tsk_i <- data.frame(y = y, X, check.names = FALSE)
+      tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
+    }
+
     fit <- do.call(lrn, params)
     if (!is.null(tuning)) {
       if (is.null(tuning$tuner)) {
@@ -235,12 +248,6 @@ rml.mlr3 <- function(
       }
 
       if (!is.null(block_sampling)) {
-        rownames(X) <- NULL
-        tsk_i <- data.frame(y = y, X, id = rep(1:NROW(X), each = block_sampling), check.names = FALSE)
-        tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
-        # tsk_i$encapsulate("evaluate", fallback = lrn("regr.featureless"))
-        tsk_i$col_roles$group <- "id"
-        tsk_i$col_roles$feature <- setdiff(tsk_i$col_roles$feature, "id")
         tuning$resampling$instantiate(tsk_i)
       }
 
