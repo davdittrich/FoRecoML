@@ -371,6 +371,7 @@ rml.lightgbm <- function(
     } else {
       nrounds <- ifelse(is.null(params$nrounds), 100, params$nrounds)
     }
+    X <- as.matrix(X)
     train <- lgb.Dataset(data = X, label = y)
     fit <- lgb.train(
       data = train,
@@ -382,6 +383,7 @@ rml.lightgbm <- function(
 
   bts <- NULL
   if (!is.null(Xtest)) {
+    Xtest <- as.matrix(Xtest)
     bts <- as.vector(predict(fit, Xtest))
   }
 
