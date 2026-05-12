@@ -248,7 +248,11 @@ terml <- function(
     attr(sel_mat, "sel_method") <- features
 
     # Remove NA variables from sel_mat
-    na_var <- colSums(is.na(hat)) >= 0.75 * NROW(hat)
+    na_var <- vapply(
+      seq_len(NCOL(hat)),
+      function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
+      logical(1)
+    )
     if (any(na_var)) {
       if (NCOL(sel_mat) == 1) {
         if (length(sel_mat) == 1) {
@@ -454,7 +458,11 @@ terml_fit <- function(
   attr(sel_mat, "sel_method") <- features
 
   # Remove NA variables from sel_mat
-  na_var <- colSums(is.na(hat)) >= 0.75 * NROW(hat)
+  na_var <- vapply(
+    seq_len(NCOL(hat)),
+    function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
+    logical(1)
+  )
   if (any(na_var)) {
     if (NCOL(sel_mat) == 1) {
       if (length(sel_mat) == 1) {
