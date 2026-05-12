@@ -51,15 +51,7 @@ rml <- function(
   # Otherwise (legacy/csrml path) derive keep_cols from sel_mat and slice here.
   if (is.null(keep_cols)) {
     active_ncol <- if (!is.null(hat)) NCOL(hat) else NCOL(base)
-    keep_cols <- if (length(sel_mat) == 1) {
-      seq_len(active_ncol)
-    } else if (is(sel_mat, "sparseVector")) {
-      which(as.numeric(sel_mat) != 0)
-    } else if (NCOL(sel_mat) == 1) {
-      which(as.numeric(sel_mat[, 1]) != 0)
-    } else {
-      which(Matrix::rowSums(sel_mat != 0) > 0)
-    }
+    keep_cols <- sel_mat_keep_cols(sel_mat, active_ncol)
     slice <- length(keep_cols) < active_ncol
     if (slice) {
       col_map <- rep(NA_integer_, active_ncol)

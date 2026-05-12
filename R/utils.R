@@ -109,7 +109,12 @@ input2rtw <- function(x, kset) {
 # Slice-first variant of input2rtw: materializes ONLY the columns whose global
 # index (in the full row-replicated output) is in `cols`. Output column order
 # matches `cols`. Full-cols invocation is byte-identical to input2rtw().
+# `cols` must be unique strictly-increasing integers (use `which()` output).
 input2rtw_partial <- function(x, kset, cols) {
+  if (length(cols) == 0L) {
+    n_rows <- NROW(FoReco::FoReco2matrix(x, kset)[[1]]) * kset[1]
+    return(matrix(numeric(0), nrow = n_rows, ncol = 0))
+  }
   parts <- FoReco::FoReco2matrix(x, kset)
   # do.call(cbind, rev(parts)) ordering => reversed level order
   ncol_per_level_rev <- vapply(rev(parts), NCOL, integer(1))
