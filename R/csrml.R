@@ -220,7 +220,7 @@ csrml <- function(
     # Remove NA variables from sel_mat
     na_var <- vapply(
       seq_len(NCOL(hat)),
-      function(j) mean(is.na(hat[, j])) >= 0.75,
+      function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
       logical(1)
     )
     if (any(na_var)) {
@@ -367,7 +367,7 @@ csrml_fit <- function(
   # Remove NA variables from sel_mat
   na_var <- vapply(
     seq_len(NCOL(hat)),
-    function(j) mean(is.na(hat[, j])) >= 0.75,
+    function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
     logical(1)
   )
   if (any(na_var)) {
