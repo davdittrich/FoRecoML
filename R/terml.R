@@ -204,15 +204,18 @@ terml <- function(
       )
     } else if (length(hat) %% kt != 0) {
       cli_abort("Incorrect {.arg hat} length.", call = NULL)
-    } else {
-      if (!grepl("mfh", features)) {
-        hat <- input2rtw(hat, kset)
-      } else {
-        h_hat <- length(hat) / kt
-        hat <- vec2hmat(vec = hat, h = h_hat, kset = kset)
-      }
     }
-    features_size <- NCOL(hat)
+
+    # T5: build sel_mat BEFORE materializing hat for the non-mfh slice-first path.
+    # Non-mfh: input2rtw produces ncol = length(kset). mfh: vec2hmat path stays full.
+    if (!grepl("mfh", features)) {
+      total_cols <- length(kset)
+    } else {
+      h_hat <- length(hat) / kt
+      hat <- vec2hmat(vec = hat, h = h_hat, kset = kset)
+      total_cols <- NCOL(hat)
+    }
+    features_size <- total_cols
 
     switch(
       features,
@@ -247,21 +250,44 @@ terml <- function(
     )
     attr(sel_mat, "sel_method") <- features
 
-    # Remove NA variables from sel_mat
-    na_var <- vapply(
+    # T5: slice-first materialization for non-mfh.
+    if (!grepl("mfh", features)) {
+      keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
+      hat <- input2rtw_partial(hat, kset, cols = keep_cols)
+    } else {
+      keep_cols <- NULL
+    }
+
+    # Remove NA variables from sel_mat (slice-first aware).
+    na_local <- vapply(
       seq_len(NCOL(hat)),
       function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
       logical(1)
     )
-    if (any(na_var)) {
-      if (NCOL(sel_mat) == 1) {
-        if (length(sel_mat) == 1) {
-          sel_mat <- rep(sel_mat, NCOL(hat))
+    if (any(na_local)) {
+      if (is.null(keep_cols)) {
+        if (NCOL(sel_mat) == 1) {
+          if (length(sel_mat) == 1) {
+            sel_mat <- rep(sel_mat, NCOL(hat))
+          }
+          sel_mat[na_local] <- 0
+          sel_mat <- as(sel_mat, "sparseVector")
+        } else {
+          sel_mat[na_local, ] <- 0
         }
-        sel_mat[na_var] <- 0
-        sel_mat <- as(sel_mat, "sparseVector")
       } else {
-        sel_mat[na_var, ] <- 0
+        na_global <- keep_cols[na_local]
+        if (NCOL(sel_mat) == 1) {
+          if (length(sel_mat) == 1) {
+            sel_mat <- rep(sel_mat, total_cols)
+          }
+          sel_mat[na_global] <- 0
+          sel_mat <- as(sel_mat, "sparseVector")
+        } else {
+          sel_mat[na_global, ] <- 0
+        }
+        hat <- hat[, !na_local, drop = FALSE]
+        keep_cols <- keep_cols[!na_local]
       }
     }
   } else {
@@ -286,6 +312,11 @@ terml <- function(
     features <- attr(fit$sel_mat, "sel_method")
     features_size <- fit$features_size
     block_sampling <- fit$block_sampling
+    if (!grepl("mfh", features)) {
+      keep_cols <- sel_mat_keep_cols(sel_mat, features_size)
+    } else {
+      keep_cols <- NULL
+    }
   }
 
   if (missing(base)) {
@@ -298,13 +329,14 @@ terml <- function(
   } else {
     h <- length(base) / kt
     if (!grepl("mfh", features)) {
-      base <- input2rtw(base, kset)
+      base <- input2rtw_partial(base, kset, cols = keep_cols)
     } else {
       base <- vec2hmat(vec = base, h = h, kset = kset)
     }
   }
 
-  if (NCOL(base) != features_size) {
+  expected_base_ncol <- if (is.null(keep_cols)) features_size else length(keep_cols)
+  if (NCOL(base) != expected_base_ncol) {
     cli_abort(
       paste0(
         "The number of columns of {.arg base} ",
@@ -324,7 +356,8 @@ terml <- function(
     params = params,
     fit = fit,
     tuning = tuning,
-    block_sampling = block_sampling
+    block_sampling = block_sampling,
+    keep_cols = keep_cols
   )
 
   obj <- attr(reco_mat, "fit")
@@ -417,13 +450,15 @@ terml_fit <- function(
     cli_abort("Argument {.arg hat} is missing, with no default.", call = NULL)
   } else if (length(hat) %% kt != 0) {
     cli_abort("Incorrect {.arg hat} length.", call = NULL)
+  }
+
+  # T5: build sel_mat BEFORE materializing hat (non-mfh slice-first).
+  if (!grepl("mfh", features)) {
+    total_cols <- length(kset)
   } else {
-    if (!grepl("mfh", features)) {
-      hat <- input2rtw(hat, kset)
-    } else {
-      h <- length(hat) / kt
-      hat <- vec2hmat(vec = hat, h = h, kset = kset)
-    }
+    h <- length(hat) / kt
+    hat <- vec2hmat(vec = hat, h = h, kset = kset)
+    total_cols <- NCOL(hat)
   }
 
   switch(
@@ -457,21 +492,44 @@ terml_fit <- function(
   )
   attr(sel_mat, "sel_method") <- features
 
-  # Remove NA variables from sel_mat
-  na_var <- vapply(
+  # T5: slice-first materialization for non-mfh.
+  if (!grepl("mfh", features)) {
+    keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
+    hat <- input2rtw_partial(hat, kset, cols = keep_cols)
+  } else {
+    keep_cols <- NULL
+  }
+
+  # Remove NA variables from sel_mat (slice-first aware).
+  na_local <- vapply(
     seq_len(NCOL(hat)),
     function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
     logical(1)
   )
-  if (any(na_var)) {
-    if (NCOL(sel_mat) == 1) {
-      if (length(sel_mat) == 1) {
-        sel_mat <- rep(sel_mat, NCOL(hat))
+  if (any(na_local)) {
+    if (is.null(keep_cols)) {
+      if (NCOL(sel_mat) == 1) {
+        if (length(sel_mat) == 1) {
+          sel_mat <- rep(sel_mat, NCOL(hat))
+        }
+        sel_mat[na_local] <- 0
+        sel_mat <- as(sel_mat, "sparseVector")
+      } else {
+        sel_mat[na_local, ] <- 0
       }
-      sel_mat[na_var] <- 0
-      sel_mat <- as(sel_mat, "sparseVector")
     } else {
-      sel_mat[na_var, ] <- 0
+      na_global <- keep_cols[na_local]
+      if (NCOL(sel_mat) == 1) {
+        if (length(sel_mat) == 1) {
+          sel_mat <- rep(sel_mat, total_cols)
+        }
+        sel_mat[na_global] <- 0
+        sel_mat <- as(sel_mat, "sparseVector")
+      } else {
+        sel_mat[na_global, ] <- 0
+      }
+      hat <- hat[, !na_local, drop = FALSE]
+      keep_cols <- keep_cols[!na_local]
     }
   }
 
@@ -484,7 +542,8 @@ terml_fit <- function(
     params = params,
     fit = NULL,
     tuning = tuning,
-    block_sampling = block_sampling
+    block_sampling = block_sampling,
+    keep_cols = keep_cols
   )
 
   obj <- new_rml_fit(
@@ -495,7 +554,7 @@ terml_fit <- function(
     approach = approach,
     framework = "te",
     features = features,
-    features_size = NCOL(hat),
+    features_size = total_cols,
     block_sampling = block_sampling
   )
 

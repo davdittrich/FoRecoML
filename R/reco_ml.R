@@ -7,6 +7,7 @@ rml <- function(
   fit = NULL,
   params = NULL,
   seed = NULL,
+  keep_cols = NULL,
   ...
 ) {
   class_base <- approach
@@ -44,25 +45,41 @@ rml <- function(
     base <- unname(base)
   }
 
-  # T4: precompute keep_cols + col_map once before lapply
-  active_ncol <- if (!is.null(hat)) NCOL(hat) else NCOL(base)
-  keep_cols <- if (length(sel_mat) == 1) {
-    seq_len(active_ncol)
-  } else if (is(sel_mat, "sparseVector")) {
-    which(as.numeric(sel_mat) != 0)
-  } else if (NCOL(sel_mat) == 1) {
-    which(as.numeric(sel_mat[, 1]) != 0)
+  # T4/T5: precompute keep_cols + col_map once before lapply.
+  # If `keep_cols` is supplied by the caller (T5 path), hat/base are ALREADY
+  # column-sliced and full feature width must be derived from sel_mat dims.
+  # Otherwise (legacy/csrml path) derive keep_cols from sel_mat and slice here.
+  if (is.null(keep_cols)) {
+    active_ncol <- if (!is.null(hat)) NCOL(hat) else NCOL(base)
+    keep_cols <- if (length(sel_mat) == 1) {
+      seq_len(active_ncol)
+    } else if (is(sel_mat, "sparseVector")) {
+      which(as.numeric(sel_mat) != 0)
+    } else if (NCOL(sel_mat) == 1) {
+      which(as.numeric(sel_mat[, 1]) != 0)
+    } else {
+      which(Matrix::rowSums(sel_mat != 0) > 0)
+    }
+    slice <- length(keep_cols) < active_ncol
+    if (slice) {
+      col_map <- rep(NA_integer_, active_ncol)
+      col_map[keep_cols] <- seq_along(keep_cols)
+      if (!is.null(hat))  hat  <- hat[,  keep_cols, drop = FALSE]
+      if (!is.null(base)) base <- base[, keep_cols, drop = FALSE]
+    } else {
+      col_map <- NULL
+    }
   } else {
-    which(Matrix::rowSums(sel_mat != 0) > 0)
-  }
-  slice <- length(keep_cols) < active_ncol
-  if (slice) {
+    # T5: hat/base pre-sliced. active_ncol = full feature count from sel_mat.
+    active_ncol <- if (length(sel_mat) == 1) {
+      if (!is.null(hat)) NCOL(hat) else NCOL(base)
+    } else if (is(sel_mat, "sparseVector")) {
+      length(sel_mat)
+    } else {
+      NROW(sel_mat)
+    }
     col_map <- rep(NA_integer_, active_ncol)
     col_map[keep_cols] <- seq_along(keep_cols)
-    if (!is.null(hat))  hat  <- hat[,  keep_cols, drop = FALSE]
-    if (!is.null(base)) base <- base[, keep_cols, drop = FALSE]
-  } else {
-    col_map <- NULL
   }
 
   out <- lapply(1:p, function(i) {

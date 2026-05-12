@@ -106,6 +106,55 @@ input2rtw <- function(x, kset) {
   do.call(cbind, rev(x))
 }
 
+# Slice-first variant of input2rtw: materializes ONLY the columns whose global
+# index (in the full row-replicated output) is in `cols`. Output column order
+# matches `cols`. Full-cols invocation is byte-identical to input2rtw().
+input2rtw_partial <- function(x, kset, cols) {
+  parts <- FoReco::FoReco2matrix(x, kset)
+  # do.call(cbind, rev(parts)) ordering => reversed level order
+  ncol_per_level_rev <- vapply(rev(parts), NCOL, integer(1))
+  col_offsets <- c(0L, cumsum(ncol_per_level_rev)) # length = length(kset)+1
+  out_blocks <- lapply(seq_along(ncol_per_level_rev), function(j) {
+    lvl_idx_full <- length(kset) - j + 1L # original (non-reversed) level index
+    in_range <- cols > col_offsets[j] & cols <= col_offsets[j + 1]
+    if (!any(in_range)) {
+      return(NULL)
+    }
+    local <- cols[in_range] - col_offsets[j]
+    block <- if (NCOL(parts[[lvl_idx_full]]) > 1) {
+      parts[[lvl_idx_full]][, local, drop = FALSE]
+    } else {
+      parts[[lvl_idx_full]]
+    }
+    k <- kset[lvl_idx_full]
+    expanded <- if (NCOL(block) > 1) {
+      apply(block, 2, rep, each = k)
+    } else {
+      rep(block, each = k)
+    }
+    list(mat = expanded, global_cols = cols[in_range])
+  })
+  out_blocks <- Filter(Negate(is.null), out_blocks)
+  mat <- do.call(cbind, lapply(out_blocks, `[[`, "mat"))
+  global_cols <- unlist(lapply(out_blocks, `[[`, "global_cols"))
+  mat[, order(match(global_cols, cols)), drop = FALSE]
+}
+
+# Compute keep_cols (global column indices of features actually used) from
+# sel_mat. Mirrors the T4 keep_cols logic in rml().
+sel_mat_keep_cols <- function(sel_mat, ncol_full) {
+  if (length(sel_mat) == 1) {
+    return(seq_len(ncol_full))
+  }
+  if (is(sel_mat, "sparseVector")) {
+    return(which(as.numeric(sel_mat) != 0))
+  }
+  if (NCOL(sel_mat) == 1) {
+    return(which(as.numeric(sel_mat[, 1]) != 0))
+  }
+  which(Matrix::rowSums(sel_mat != 0) > 0)
+}
+
 # Reconcile using machine learning models class
 #
 # This function creates an object of class \code{reconcile_ml} that contains the
