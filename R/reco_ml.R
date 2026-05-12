@@ -44,14 +44,36 @@ rml <- function(
     base <- unname(base)
   }
 
+  # T4: precompute keep_cols + col_map once before lapply
+  active_ncol <- if (!is.null(hat)) NCOL(hat) else NCOL(base)
+  keep_cols <- if (length(sel_mat) == 1) {
+    seq_len(active_ncol)
+  } else if (is(sel_mat, "sparseVector")) {
+    which(as.numeric(sel_mat) != 0)
+  } else if (NCOL(sel_mat) == 1) {
+    which(as.numeric(sel_mat[, 1]) != 0)
+  } else {
+    which(Matrix::rowSums(sel_mat != 0) > 0)
+  }
+  slice <- length(keep_cols) < active_ncol
+  if (slice) {
+    col_map <- rep(NA_integer_, active_ncol)
+    col_map[keep_cols] <- seq_along(keep_cols)
+    if (!is.null(hat))  hat  <- hat[,  keep_cols, drop = FALSE]
+    if (!is.null(base)) base <- base[, keep_cols, drop = FALSE]
+  } else {
+    col_map <- NULL
+  }
+
   out <- lapply(1:p, function(i) {
-    if (length(sel_mat) == 1) {
-      id <- seq_len(max(NCOL(hat), NCOL(base)))
-    } else if (is(sel_mat, "sparseVector") | NCOL(sel_mat) == 1) {
-      id <- which(sel_mat == 1)
+    global_id <- if (length(sel_mat) == 1) {
+      seq_len(active_ncol)
+    } else if (is(sel_mat, "sparseVector") || NCOL(sel_mat) == 1) {
+      which(as.numeric(if (is(sel_mat, "sparseVector")) sel_mat else sel_mat[, 1]) != 0)
     } else {
-      id <- which(sel_mat[, i] == 1)
+      which(sel_mat[, i] != 0)
     }
+    id <- if (is.null(col_map)) global_id else { x <- col_map[global_id]; x[!is.na(x)] }
 
     if (is.null(fit)) {
       y <- obs[, i]
