@@ -16,3 +16,8 @@ CRAN-SUBMISSION
 .dolt/
 *.db
 .beads-credential-key
+
+# AI agent context / harness (not for distribution)
+AGENTS.md
+CLAUDE.md
+.claude/
