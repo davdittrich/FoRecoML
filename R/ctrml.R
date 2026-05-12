@@ -270,15 +270,20 @@ ctrml <- function(
       cli_abort("Incorrect {.arg hat} columns dimension.", call = NULL)
     } else if (NROW(hat) != tmp$dim[["n"]]) {
       cli_abort("Incorrect {.arg hat} rows dimension.", call = NULL)
-    } else {
-      if (!grepl("mfh", features)) {
-        hat <- input2rtw(hat, tmp$set)
-      } else {
-        h <- NCOL(hat) / tmp$dim[["kt"]]
-        hat <- mat2hmat(hat, h = h, kset = tmp$set, n = tmp$dim[["n"]])
-      }
     }
-    features_size <- NCOL(hat)
+
+    # T5: build sel_mat BEFORE materializing hat so we can slice-first.
+    # For the non-mfh path, the full row-replicated training matrix has
+    # `tmp$dim[["n"]] * tmp$dim[["p"]]` columns. For mfh, sel_mat is keyed on
+    # the full mat2hmat output; we materialize first, then derive total_cols.
+    if (!grepl("mfh", features)) {
+      total_cols <- tmp$dim[["n"]] * tmp$dim[["p"]]
+    } else {
+      h <- NCOL(hat) / tmp$dim[["kt"]]
+      hat <- mat2hmat(hat, h = h, kset = tmp$set, n = tmp$dim[["n"]])
+      total_cols <- NCOL(hat)
+    }
+    features_size <- total_cols
 
     switch(
       features,
@@ -345,21 +350,49 @@ ctrml <- function(
     )
     attr(sel_mat, "sel_method") <- features
 
-    # Remove NA variables from sel_mat
-    na_var <- vapply(
+    # T5: slice-first materialization for non-mfh path.
+    if (!grepl("mfh", features)) {
+      keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
+      hat <- input2rtw_partial(hat, tmp$set, cols = keep_cols)
+    } else {
+      keep_cols <- NULL
+    }
+
+    # Remove NA variables from sel_mat. For the slice-first (non-mfh) path,
+    # NA detection runs on the already-sliced hat and we map local NA columns
+    # back to global sel_mat row indices via keep_cols.
+    na_local <- vapply(
       seq_len(NCOL(hat)),
       function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
       logical(1)
     )
-    if (any(na_var)) {
-      if (NCOL(sel_mat) == 1) {
-        if (length(sel_mat) == 1) {
-          sel_mat <- rep(sel_mat, NCOL(hat))
+    if (any(na_local)) {
+      if (is.null(keep_cols)) {
+        # mfh path: hat is the full materialization; sel_mat is sized to it.
+        if (NCOL(sel_mat) == 1) {
+          if (length(sel_mat) == 1) {
+            sel_mat <- rep(sel_mat, NCOL(hat))
+          }
+          sel_mat[na_local] <- 0
+          sel_mat <- as(sel_mat, "sparseVector")
+        } else {
+          sel_mat[na_local, ] <- 0
         }
-        sel_mat[na_var] <- 0
-        sel_mat <- as(sel_mat, "sparseVector")
       } else {
-        sel_mat[na_var, ] <- 0
+        # T5: map local NA -> global indices via keep_cols.
+        na_global <- keep_cols[na_local]
+        if (NCOL(sel_mat) == 1) {
+          if (length(sel_mat) == 1) {
+            sel_mat <- rep(sel_mat, total_cols)
+          }
+          sel_mat[na_global] <- 0
+          sel_mat <- as(sel_mat, "sparseVector")
+        } else {
+          sel_mat[na_global, ] <- 0
+        }
+        # Drop NA columns from pre-sliced hat and refresh keep_cols.
+        hat <- hat[, !na_local, drop = FALSE]
+        keep_cols <- keep_cols[!na_local]
       }
     }
   } else {
@@ -385,6 +418,13 @@ ctrml <- function(
     features <- attr(fit$sel_mat, "sel_method")
     features_size <- fit$features_size
     block_sampling <- fit$block_sampling
+    # T5: in fit-reuse, derive keep_cols from stored (full) sel_mat for the
+    # non-mfh path so we can slice-materialize base. mfh path stays full.
+    if (!grepl("mfh", features)) {
+      keep_cols <- sel_mat_keep_cols(sel_mat, features_size)
+    } else {
+      keep_cols <- NULL
+    }
   }
 
   if (missing(base)) {
@@ -399,14 +439,17 @@ ctrml <- function(
   } else {
     h <- NCOL(base) / tmp$dim[["kt"]]
     if (!grepl("mfh", features)) {
-      base <- input2rtw(base, tmp$set)
+      base <- input2rtw_partial(base, tmp$set, cols = keep_cols)
     } else {
       # Calculate 'h' and 'base_hmat'
       base <- mat2hmat(base, h = h, kset = tmp$set, n = tmp$dim[["n"]])
     }
   }
 
-  if (NCOL(base) != features_size) {
+  # T5: post-materialization width = length(keep_cols) for non-mfh slice-first
+  # path, or features_size for mfh (no slicing).
+  expected_base_ncol <- if (is.null(keep_cols)) features_size else length(keep_cols)
+  if (NCOL(base) != expected_base_ncol) {
     cli_abort(
       paste0(
         "The number of columns of {.arg base} ",
@@ -426,7 +469,8 @@ ctrml <- function(
     params = params,
     fit = fit,
     tuning = tuning,
-    block_sampling = block_sampling
+    block_sampling = block_sampling,
+    keep_cols = keep_cols
   )
 
   obj <- attr(reco_mat, "fit")
@@ -532,13 +576,15 @@ ctrml_fit <- function(
     cli_abort("Incorrect {.arg hat} columns dimension.", call = NULL)
   } else if (NROW(hat) != tmp$dim[["n"]]) {
     cli_abort("Incorrect {.arg hat} rows dimension.", call = NULL)
+  }
+
+  # T5: build sel_mat BEFORE materializing hat (non-mfh slice-first).
+  if (!grepl("mfh", features)) {
+    total_cols <- tmp$dim[["n"]] * tmp$dim[["p"]]
   } else {
-    if (!grepl("mfh", features)) {
-      hat <- input2rtw(hat, tmp$set)
-    } else {
-      h <- NCOL(hat) / tmp$dim[["kt"]]
-      hat <- mat2hmat(hat, h = h, kset = tmp$set, n = tmp$dim[["n"]])
-    }
+    h <- NCOL(hat) / tmp$dim[["kt"]]
+    hat <- mat2hmat(hat, h = h, kset = tmp$set, n = tmp$dim[["n"]])
+    total_cols <- NCOL(hat)
   }
 
   switch(
@@ -606,21 +652,44 @@ ctrml_fit <- function(
   )
   attr(sel_mat, "sel_method") <- features
 
-  # Remove NA variables from sel_mat
-  na_var <- vapply(
+  # T5: slice-first materialization for non-mfh.
+  if (!grepl("mfh", features)) {
+    keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
+    hat <- input2rtw_partial(hat, tmp$set, cols = keep_cols)
+  } else {
+    keep_cols <- NULL
+  }
+
+  # Remove NA variables from sel_mat (slice-first aware).
+  na_local <- vapply(
     seq_len(NCOL(hat)),
     function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
     logical(1)
   )
-  if (any(na_var)) {
-    if (NCOL(sel_mat) == 1) {
-      if (length(sel_mat) == 1) {
-        sel_mat <- rep(sel_mat, NCOL(hat))
+  if (any(na_local)) {
+    if (is.null(keep_cols)) {
+      if (NCOL(sel_mat) == 1) {
+        if (length(sel_mat) == 1) {
+          sel_mat <- rep(sel_mat, NCOL(hat))
+        }
+        sel_mat[na_local] <- 0
+        sel_mat <- as(sel_mat, "sparseVector")
+      } else {
+        sel_mat[na_local, ] <- 0
       }
-      sel_mat[na_var] <- 0
-      sel_mat <- as(sel_mat, "sparseVector")
     } else {
-      sel_mat[na_var, ] <- 0
+      na_global <- keep_cols[na_local]
+      if (NCOL(sel_mat) == 1) {
+        if (length(sel_mat) == 1) {
+          sel_mat <- rep(sel_mat, total_cols)
+        }
+        sel_mat[na_global] <- 0
+        sel_mat <- as(sel_mat, "sparseVector")
+      } else {
+        sel_mat[na_global, ] <- 0
+      }
+      hat <- hat[, !na_local, drop = FALSE]
+      keep_cols <- keep_cols[!na_local]
     }
   }
 
@@ -633,7 +702,8 @@ ctrml_fit <- function(
     params = params,
     fit = NULL,
     tuning = tuning,
-    block_sampling = block_sampling
+    block_sampling = block_sampling,
+    keep_cols = keep_cols
   )
 
   obj <- new_rml_fit(
@@ -645,7 +715,7 @@ ctrml_fit <- function(
     approach = approach,
     framework = "ct",
     features = features,
-    features_size = NCOL(hat),
+    features_size = total_cols,
     block_sampling = block_sampling
   )
   return(obj)
