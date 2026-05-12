@@ -314,6 +314,20 @@ input2rtw_partial <- function(x, kset, cols) {
   mat[, order(match(global_cols, cols)), drop = FALSE]
 }
 
+# Build a column-replicated sparse 0/1 indicator matrix:
+# sparse `length(idx) x n_cols` where each column equals `idx` (0/1 mask).
+# Avoids the dense rep(idx, n_cols) allocation done by
+# Matrix(rep(idx, n_cols), ncol=n_cols, sparse=TRUE).
+sparse_col_replicate <- function(idx, n_cols) {
+  nz <- which(idx != 0)
+  Matrix::sparseMatrix(
+    i = rep(nz, times = n_cols),
+    j = rep(seq_len(n_cols), each = length(nz)),
+    x = 1,
+    dims = c(length(idx), n_cols)
+  )
+}
+
 # Compute keep_cols (global column indices of features actually used) from
 # sel_mat. Mirrors the T4 keep_cols logic in rml().
 sel_mat_keep_cols <- function(sel_mat, ncol_full) {

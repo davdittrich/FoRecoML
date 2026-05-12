@@ -200,14 +200,14 @@ csrml <- function(
     switch(
       features,
       "bts" = {
-        sel_mat <- Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+        sel_mat <- sparse_col_replicate(id_bts, nb)
       },
       "str" = {
         sel_mat <- 1 * (strc_mat != 0)
       },
       "str-bts" = {
         sel_mat <- 1 * (strc_mat != 0)
-        sel_mat <- sel_mat + Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+        sel_mat <- sel_mat + sparse_col_replicate(id_bts, nb)
         sel_mat[sel_mat != 0] <- 1
       },
       "all" = {
@@ -346,14 +346,14 @@ csrml_fit <- function(
   switch(
     features,
     "bts" = {
-      sel_mat <- Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+      sel_mat <- sparse_col_replicate(id_bts, nb)
     },
     "str" = {
       sel_mat <- 1 * (strc_mat != 0)
     },
     "str-bts" = {
       sel_mat <- 1 * (strc_mat != 0)
-      sel_mat <- sel_mat + Matrix(rep(id_bts, nb), ncol = nb, sparse = TRUE)
+      sel_mat <- sel_mat + sparse_col_replicate(id_bts, nb)
       sel_mat[sel_mat != 0] <- 1
     },
     "all" = {

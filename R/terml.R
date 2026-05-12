@@ -229,7 +229,7 @@ terml <- function(
       "mfh-str-hfts" = {
         sel_mat <- 1 * (strc_mat != 0)
         sel_mat <- sel_mat +
-          Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
+          sparse_col_replicate(id_hfts, m)
         sel_mat[sel_mat != 0] <- 1
       },
       "mfh-all" = {
@@ -472,7 +472,7 @@ terml_fit <- function(
     },
     "mfh-str-hfts" = {
       sel_mat <- 1 * (strc_mat != 0)
-      sel_mat <- sel_mat + Matrix(rep(id_hfts, m), ncol = m, sparse = TRUE)
+      sel_mat <- sel_mat + sparse_col_replicate(id_hfts, m)
       sel_mat[sel_mat != 0] <- 1
     },
     "mfh-all" = {
