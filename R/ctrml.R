@@ -326,24 +326,14 @@ ctrml <- function(
       "mfh-str-hfbts" = {
         sel_mat <- 1 * (sel_mat != 0)
         sel_mat <- sel_mat +
-          Matrix(
-            rep(id_hfbts, tmp$dim[["nb"]] * tmp$dim[["m"]]),
-            ncol = tmp$dim[["nb"]] * tmp$dim[["m"]],
-            sparse = TRUE
-          )
+          sparse_col_replicate(id_hfbts, tmp$dim[["nb"]] * tmp$dim[["m"]])
         sel_mat[sel_mat != 0] <- 1
       },
       "mfh-str-bts" = {
         sel_mat <- 1 * (sel_mat != 0)
+        idx_local <- rep(id_bts, each = tmp$dim[["kt"]])
         sel_mat <- sel_mat +
-          Matrix(
-            rep(
-              rep(id_bts, each = tmp$dim[["kt"]]),
-              tmp$dim[["nb"]] * tmp$dim[["m"]]
-            ),
-            ncol = tmp$dim[["nb"]] * tmp$dim[["m"]],
-            sparse = TRUE
-          )
+          sparse_col_replicate(idx_local, tmp$dim[["nb"]] * tmp$dim[["m"]])
         sel_mat[sel_mat != 0] <- 1
       },
       "mfh-all" = {
@@ -636,24 +626,14 @@ ctrml_fit <- function(
     "mfh-str-hfbts" = {
       sel_mat <- 1 * (sel_mat != 0)
       sel_mat <- sel_mat +
-        Matrix(
-          rep(id_hfbts, tmp$dim[["nb"]] * tmp$dim[["m"]]),
-          ncol = tmp$dim[["nb"]] * tmp$dim[["m"]],
-          sparse = TRUE
-        )
+        sparse_col_replicate(id_hfbts, tmp$dim[["nb"]] * tmp$dim[["m"]])
       sel_mat[sel_mat != 0] <- 1
     },
     "mfh-str-bts" = {
       sel_mat <- 1 * (sel_mat != 0)
+      idx_local <- rep(id_bts, each = tmp$dim[["kt"]])
       sel_mat <- sel_mat +
-        Matrix(
-          rep(
-            rep(id_bts, each = tmp$dim[["kt"]]),
-            tmp$dim[["nb"]] * tmp$dim[["m"]]
-          ),
-          ncol = tmp$dim[["nb"]] * tmp$dim[["m"]],
-          sparse = TRUE
-        )
+        sparse_col_replicate(idx_local, tmp$dim[["nb"]] * tmp$dim[["m"]])
       sel_mat[sel_mat != 0] <- 1
     },
     "mfh-all" = {
