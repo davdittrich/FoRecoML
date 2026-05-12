@@ -136,6 +136,9 @@ checkpoint_session_dir <- function() {
   # upstream set.seed().
   d <- tempfile(pattern = "foreco_ckpt_", tmpdir = tempdir())
   dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  if (!dir.exists(d)) {
+    cli_abort("Failed to create checkpoint directory {.path {d}}.")
+  }
   d
 }
 
@@ -167,7 +170,7 @@ available_ram_bytes <- function() {
   os <- Sys.info()[["sysname"]]
   if (os == "Linux") {
     info <- tryCatch(
-      readLines("/proc/meminfo", n = 5),
+      readLines("/proc/meminfo"),
       error = function(e) NULL
     )
     if (is.null(info)) {
@@ -184,11 +187,23 @@ available_ram_bytes <- function() {
     return(kb * 1024)
   }
   if (os == "Darwin") {
-    total <- tryCatch(
-      as.numeric(system("sysctl -n hw.memsize", intern = TRUE)),
-      error = function(e) NA_real_
-    )
-    return(total)
+    out <- tryCatch(system("vm_stat", intern = TRUE),
+                    error = function(e) NULL, warning = function(w) NULL)
+    if (is.null(out)) return(NA_real_)
+    # Page size (typically 4096 or 16384 on Apple Silicon)
+    ps_line <- grep("page size of", out, value = TRUE)
+    ps <- if (length(ps_line)) {
+      as.numeric(regmatches(ps_line, regexpr("\\d+", ps_line)))
+    } else 4096
+    get_pages <- function(label) {
+      l <- grep(label, out, value = TRUE, fixed = TRUE)
+      if (!length(l)) return(0)
+      as.numeric(sub("\\.$", "", regmatches(l, regexpr("\\d+", l))))
+    }
+    free  <- get_pages("Pages free:")
+    inact <- get_pages("Pages inactive:")
+    spec  <- get_pages("Pages speculative:")
+    return((free + inact + spec) * ps)
   }
   if (os == "Windows") {
     out <- tryCatch(
