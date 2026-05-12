@@ -193,4 +193,34 @@ if (require(testthat)) {
     )
     expect_equal(as.numeric(r1), as.numeric(r2), tolerance = 1e-12)
   })
+
+  test_that("predict-reuse numerical equivalence with checkpointed fit (mw3.3)", {
+    # mw3.3: reco_mat returned by predict-reuse must be numerically identical
+    # to the in-memory baseline regardless of whether the per-iteration fit is
+    # retained in out[[i]] or dropped. Memory behaviour verified by inspection;
+    # this test guards reco_mat correctness.
+    skip_if_not_installed("qs2")
+    skip_if_not_installed("randomForest")
+    fx_local <- make_fixture()
+    tmpd <- file.path(tempdir(), "foreco_mw33_test")
+    if (dir.exists(tmpd)) unlink(tmpd, recursive = TRUE)
+    dir.create(tmpd, recursive = TRUE)
+    on.exit(unlink(tmpd, recursive = TRUE), add = TRUE)
+
+    set.seed(42)
+    mdl_disk <- csrml_fit(
+      hat = fx_local$hat, obs = fx_local$obs, agg_mat = fx_local$agg_mat,
+      approach = "randomForest", features = "all", checkpoint = tmpd
+    )
+    set.seed(42)
+    mdl_mem <- csrml_fit(
+      hat = fx_local$hat, obs = fx_local$obs, agg_mat = fx_local$agg_mat,
+      approach = "randomForest", features = "all", checkpoint = FALSE
+    )
+
+    r_disk <- csrml(base = fx_local$base, fit = mdl_disk, agg_mat = fx_local$agg_mat)
+    r_mem  <- csrml(base = fx_local$base, fit = mdl_mem,  agg_mat = fx_local$agg_mat)
+
+    expect_equal(as.numeric(r_disk), as.numeric(r_mem), tolerance = 1e-12)
+  })
 }
