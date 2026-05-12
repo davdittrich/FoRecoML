@@ -8,6 +8,7 @@ rml <- function(
   params = NULL,
   seed = NULL,
   keep_cols = NULL,
+  checkpoint = "auto",
   ...
 ) {
   class_base <- approach
@@ -39,6 +40,15 @@ rml <- function(
   } else {
     # sel_mat <- fit$sel_mat
     p <- length(fit$fit)
+  }
+
+  # T6 — Resolve tri-mode `checkpoint` into NULL (disabled) or a directory.
+  # Only meaningful during training (fit=NULL). On fit reuse, the stored fit
+  # already encodes whether models are paths or in-memory; we never re-decide.
+  checkpoint_dir <- if (is.null(fit)) {
+    resolve_checkpoint(checkpoint, hat, class_base, p)
+  } else {
+    NULL
   }
 
   if (!is.null(base)) {
@@ -74,7 +84,13 @@ rml <- function(
     col_map[keep_cols] <- seq_along(keep_cols)
   }
 
-  out <- lapply(1:p, function(i) {
+  # T6 — for-loop replaces lapply so we can serialize each `tmp$fit` to disk
+  # immediately (when checkpoint_dir != NULL) and replace it with a path
+  # string, then drop the in-memory copy and explicit-gc before the next i.
+  # Net effect: peak RSS = 1 live model + (p-1) path strings, instead of p
+  # live models. Predict (fit reuse) uses get_fit_i() for lazy reload.
+  out <- vector("list", p)
+  for (i in seq_len(p)) {
     global_id <- if (length(sel_mat) == 1) {
       seq_len(active_ncol)
     } else if (is(sel_mat, "sparseVector") || NCOL(sel_mat) == 1) {
@@ -106,7 +122,8 @@ rml <- function(
       }
     } else {
       y <- X <- NULL
-      fit_i <- fit$fit[[i]]
+      # T6 — lazy-load: fit$fit[[i]] may be a path (checkpointed) or model.
+      fit_i <- get_fit_i(fit, i)
     }
 
     if (!is.null(base)) {
@@ -124,14 +141,33 @@ rml <- function(
       params = params,
       ...
     )
-    return(tmp)
-  })
+
+    # T6 — Serialize freshly-trained fit to disk, replace with path. Skip
+    # when no training happened (fit reuse: tmp$fit IS the loaded model and
+    # we don't want to re-serialize it; the persistent path is already in
+    # fit$fit[[i]]).
+    if (!is.null(checkpoint_dir) && is.null(fit)) {
+      path_i <- serialize_fit(tmp$fit, checkpoint_dir, i, class_base)
+      tmp$fit <- path_i
+    }
+
+    out[[i]] <- tmp
+    rm(X, y, Xtest, fit_i)
+    if (!is.null(checkpoint_dir)) {
+      gc(verbose = FALSE)
+    }
+  }
 
   ml_step <- do.call("rbind", out)
   if (is.null(fit)) {
     fit <- NULL
     fit$sel_mat <- sel_mat
     fit$fit <- do.call("list", ml_step[, "fit"])
+    # T6 — stash approach + checkpoint_dir so the outer entry point can pass
+    # them through to new_rml_fit() (predict reuse needs `approach` for the
+    # serializer dispatch in get_fit_i()).
+    fit$approach <- class_base
+    fit$checkpoint_dir <- checkpoint_dir
     class(fit) <- "rml_fit"
   }
 

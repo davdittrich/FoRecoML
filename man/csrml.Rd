@@ -7,11 +7,12 @@
 \usage{
 # Reconciled forecasts
 csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
-      params = NULL, tuning = NULL, sntz = FALSE, round = FALSE, fit = NULL)
+      params = NULL, tuning = NULL, sntz = FALSE, round = FALSE,
+      fit = NULL, checkpoint = "auto")
 
 # Pre-trained reconciled ML models
 csrml_fit(hat, obs, agg_mat, features = "all", approach = "randomForest",
-          params = NULL, tuning = NULL)
+          params = NULL, tuning = NULL, checkpoint = "auto")
 }
 \arguments{
 \item{base}{A (\eqn{h \times n}) numeric matrix or multivariate time series
@@ -73,6 +74,30 @@ integer values and coherence is ensured via a bottom-up adjustment.
 \item{fit}{A pre-trained ML reconciliation model (see,
 \link{extract_reconciled_ml}). If supplied, training data (\code{hat},
 \code{obs}) are not required.}
+
+\item{checkpoint}{Controls disk-backed checkpointing of fitted per-series
+models. With \eqn{p} bottom-level models trained simultaneously, the
+default behaviour can exceed available RAM for large hierarchies. Tri-mode
+semantics:
+\itemize{
+\item \code{"auto"} (\emph{default}): enable checkpointing when the
+estimated peak memory exceeds 80\\% of available physical RAM, using a
+session-scoped sub-directory of \code{tempdir()}; otherwise keep all fits
+in memory. On platforms where available memory cannot be detected, this
+falls back to OFF.
+\item \code{TRUE} or \code{"true"}: always enable, using a session-scoped
+sub-directory of \code{tempdir()} (removed at end of the R session).
+\item \code{FALSE} or \code{"false"}: never enable; keep all fits in
+memory (legacy behaviour, byte-identical to pre-checkpoint).
+\item character path: always enable, storing fits in the given directory
+(created if missing). Use this for persistent storage suitable for
+reusing a fit across R sessions via the \code{fit} argument.
+}
+Serialization uses \pkg{qs2} for in-memory R objects (\code{randomForest},
+\code{mlr3}) and \pkg{xgboost} raw bytes, and the native \code{lgb.save}
+for \pkg{lightgbm} (its C++ external pointer cannot be serialized by
+\pkg{qs2}). Predictions from a checkpointed fit are identical
+(\eqn{\le 10^{-12}}) to the in-memory fit.}
 }
 \value{
 \itemize{

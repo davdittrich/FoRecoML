@@ -15,7 +15,7 @@
 #' # Reconciled forecasts
 #' ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
 #'       approach = "randomForest", params = NULL, tuning = NULL,
-#'       sntz = FALSE, round = FALSE, fit = NULL)
+#'       sntz = FALSE, round = FALSE, fit = NULL, checkpoint = "auto")
 #'
 #' @param base A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
 #'   forecasts to be reconciled; \eqn{n} is the total number of variables,
@@ -70,6 +70,29 @@
 #'   [mlr3tuning] framework (e.g., terminators, search spaces). The argument
 #'   format follows [mlr3tuning::auto_tuner], except that the learner is set
 #'   through `params`.
+#' @param checkpoint Controls disk-backed checkpointing of fitted per-series
+#'   models. With \eqn{p} bottom-level models trained simultaneously, the
+#'   default behaviour can exceed available RAM for large hierarchies. Tri-mode
+#'   semantics:
+#'   \itemize{
+#'   \item \code{"auto"} (\emph{default}): enable checkpointing when the
+#'   estimated peak memory exceeds 80\% of available physical RAM, using a
+#'   session-scoped sub-directory of \code{tempdir()}; otherwise keep all fits
+#'   in memory. On platforms where available memory cannot be detected, this
+#'   falls back to OFF.
+#'   \item \code{TRUE} or \code{"true"}: always enable, using a session-scoped
+#'   sub-directory of \code{tempdir()} (removed at end of the R session).
+#'   \item \code{FALSE} or \code{"false"}: never enable; keep all fits in
+#'   memory (legacy behaviour, byte-identical to pre-checkpoint).
+#'   \item character path: always enable, storing fits in the given directory
+#'   (created if missing). Use this for persistent storage suitable for
+#'   reusing a fit across R sessions via the \code{fit} argument.
+#'   }
+#'   Serialization uses \pkg{qs2} for in-memory R objects (\code{randomForest},
+#'   \code{mlr3}) and \pkg{xgboost} raw bytes, and the native \code{lgb.save}
+#'   for \pkg{lightgbm} (its C++ external pointer cannot be serialized by
+#'   \pkg{qs2}). Predictions from a checkpointed fit are identical
+#'   (\eqn{\le 10^{-12}}) to the in-memory fit.
 #' @inheritParams FoReco::ctrec
 #'
 #' @returns
@@ -226,7 +249,8 @@ ctrml <- function(
   tuning = NULL,
   sntz = FALSE,
   round = FALSE,
-  fit = NULL
+  fit = NULL,
+  checkpoint = "auto"
 ) {
   if (is.null(fit)) {
     # Check if 'agg_order' is provided
@@ -470,7 +494,8 @@ ctrml <- function(
     fit = fit,
     tuning = tuning,
     block_sampling = block_sampling,
-    keep_cols = keep_cols
+    keep_cols = keep_cols,
+    checkpoint = checkpoint
   )
 
   obj <- attr(reco_mat, "fit")
@@ -484,7 +509,8 @@ ctrml <- function(
     framework = "ct",
     features = features,
     features_size = features_size,
-    block_sampling = block_sampling
+    block_sampling = block_sampling,
+    checkpoint_dir = obj$checkpoint_dir
   )
   attr(reco_mat, "fit") <- NULL
   if (!grepl("mfh", features)) {
@@ -515,7 +541,8 @@ ctrml <- function(
 #' @usage
 #' # Pre-trained reconciled ML models
 #' ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
-#'           approach = "randomForest", params = NULL, tuning = NULL)
+#'           approach = "randomForest", params = NULL, tuning = NULL,
+#'           checkpoint = "auto")
 #'
 #' @return
 #'   - [ctrml_fit] returns a fitted object that can be reused for
@@ -533,7 +560,8 @@ ctrml_fit <- function(
   features = "all",
   approach = "randomForest",
   params = NULL,
-  tuning = NULL
+  tuning = NULL,
+  checkpoint = "auto"
 ) {
   # Check if 'agg_order' is provided
   if (missing(agg_order)) {
@@ -703,7 +731,8 @@ ctrml_fit <- function(
     fit = NULL,
     tuning = tuning,
     block_sampling = block_sampling,
-    keep_cols = keep_cols
+    keep_cols = keep_cols,
+    checkpoint = checkpoint
   )
 
   obj <- new_rml_fit(
@@ -716,7 +745,8 @@ ctrml_fit <- function(
     framework = "ct",
     features = features,
     features_size = total_cols,
-    block_sampling = block_sampling
+    block_sampling = block_sampling,
+    checkpoint_dir = obj$checkpoint_dir
   )
   return(obj)
 }
