@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "FoRecoML",
+  "project_id": "6998fa20-25ec-41e1-9c32-0db8a4f879d4"
+}
