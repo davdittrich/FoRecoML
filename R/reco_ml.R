@@ -30,7 +30,9 @@ rml <- function(
   }
 
   if (is.null(fit)) {
+    if (!is.null(names(hat))) names(hat) <- NULL
     if (!is.null(dimnames(hat))) dimnames(hat) <- NULL
+    if (!is.null(names(obs))) names(obs) <- NULL
     if (!is.null(dimnames(obs))) dimnames(obs) <- NULL
     p <- NCOL(obs)
 
