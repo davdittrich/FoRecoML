@@ -215,10 +215,7 @@ rml.mlr3 <- function(
 
     params$.key <- ifelse(is.null(params$.key), "regr.ranger", params$.key)
 
-    if (is.null(block_sampling)) {
-      tsk_i <- data.frame(y = y, X, check.names = FALSE)
-      tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
-    } else {
+    if (!is.null(block_sampling) && !is.null(tuning)) {
       tsk_i <- data.frame(
         y = y, X,
         id = rep(seq_len(NROW(X)), each = block_sampling),
@@ -227,6 +224,9 @@ rml.mlr3 <- function(
       tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
       tsk_i$col_roles$group <- "id"
       tsk_i$col_roles$feature <- setdiff(tsk_i$col_roles$feature, "id")
+    } else {
+      tsk_i <- data.frame(y = y, X, check.names = FALSE)
+      tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
     }
 
     fit <- do.call(lrn, params)
