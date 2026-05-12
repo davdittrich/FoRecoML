@@ -11,7 +11,7 @@
 #' # Reconciled forecasts
 #' terml(base, hat, obs, agg_order, tew = "sum", features = "all",
 #'       approach = "randomForest", params = NULL, tuning = NULL,
-#'       sntz = FALSE, round = FALSE, fit = NULL)
+#'       sntz = FALSE, round = FALSE, fit = NULL, checkpoint = "auto")
 #'
 #' @param base A (\eqn{h(k^\ast + m) \times 1}) numeric vector containing the
 #'   base forecasts to be reconciled, ordered from lowest to highest frequency;
@@ -162,7 +162,8 @@ terml <- function(
   tuning = NULL,
   sntz = FALSE,
   round = FALSE,
-  fit = NULL
+  fit = NULL,
+  checkpoint = "auto"
 ) {
   if (is.null(fit)) {
     if (missing(agg_order)) {
@@ -357,7 +358,8 @@ terml <- function(
     fit = fit,
     tuning = tuning,
     block_sampling = block_sampling,
-    keep_cols = keep_cols
+    keep_cols = keep_cols,
+    checkpoint = checkpoint
   )
 
   obj <- attr(reco_mat, "fit")
@@ -370,7 +372,8 @@ terml <- function(
     framework = "te",
     features = features,
     features_size = features_size,
-    block_sampling = block_sampling
+    block_sampling = block_sampling,
+    checkpoint_dir = obj$checkpoint_dir
   )
 
   attr(reco_mat, "fit") <- NULL
@@ -397,7 +400,8 @@ terml <- function(
 #' @usage
 #' # Pre-trained reconciled ML models
 #' terml_fit(hat, obs, agg_order, tew = "sum", features = "all",
-#'           approach = "randomForest", params = NULL, tuning = NULL)
+#'           approach = "randomForest", params = NULL, tuning = NULL,
+#'           checkpoint = "auto")
 #'
 #' @return
 #'   - [terml_fit] returns a fitted object that can be reused for
@@ -414,7 +418,8 @@ terml_fit <- function(
   features = "all",
   approach = "randomForest",
   params = NULL,
-  tuning = NULL
+  tuning = NULL,
+  checkpoint = "auto"
 ) {
   # Check if 'agg_order' is provided
   if (missing(agg_order)) {
@@ -543,7 +548,8 @@ terml_fit <- function(
     fit = NULL,
     tuning = tuning,
     block_sampling = block_sampling,
-    keep_cols = keep_cols
+    keep_cols = keep_cols,
+    checkpoint = checkpoint
   )
 
   obj <- new_rml_fit(
@@ -555,7 +561,8 @@ terml_fit <- function(
     framework = "te",
     features = features,
     features_size = total_cols,
-    block_sampling = block_sampling
+    block_sampling = block_sampling,
+    checkpoint_dir = obj$checkpoint_dir
   )
 
   return(obj)

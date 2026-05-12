@@ -91,6 +91,175 @@ print.rml_fit <- function(x, ...) {
   cat("  Models:", length(x$fit), "\n")
 }
 
+# T6 — Tri-mode disk checkpoint helpers.
+# `checkpoint` argument semantics (resolved here into NULL or a directory path):
+#   - FALSE / "false": never enable; keep fits in memory (legacy).
+#   - TRUE / "true": always enable; session-scoped tempdir.
+#   - "auto" (default): enable when estimated peak memory > 80% of available
+#     physical RAM; session-scoped tempdir. Falls back to OFF on platforms
+#     where available_ram_bytes() returns NA.
+#   - character path: always enable; uses that exact directory (persistent,
+#     suitable for fit reuse across sessions).
+resolve_checkpoint <- function(checkpoint, hat, approach, p) {
+  if (identical(checkpoint, FALSE) || identical(checkpoint, "false")) {
+    return(NULL)
+  }
+  if (identical(checkpoint, TRUE) || identical(checkpoint, "true")) {
+    return(checkpoint_session_dir())
+  }
+  if (is.character(checkpoint) && length(checkpoint) == 1) {
+    if (checkpoint == "auto") {
+      est <- estimate_peak_bytes(hat, approach, p)
+      avail <- available_ram_bytes()
+      if (is.finite(est) && is.finite(avail) && est > 0.8 * avail) {
+        return(checkpoint_session_dir())
+      }
+      return(NULL)
+    }
+    return(normalizePath(checkpoint, mustWork = FALSE))
+  }
+  cli_abort(
+    paste0(
+      "`checkpoint` must be 'auto' (default), TRUE/'true', ",
+      "FALSE/'false', or a directory path."
+    ),
+    call = NULL
+  )
+}
+
+checkpoint_session_dir <- function() {
+  # Use tempfile() (which does NOT consume the user's RNG state) to build a
+  # unique session-scoped directory name. We MUST NOT call sample() or any
+  # other R-RNG function here, because that would advance .Random.seed and
+  # cause checkpoint=TRUE predictions to diverge from checkpoint=FALSE for
+  # stochastic learners (randomForest, mlr3+ranger) even under identical
+  # upstream set.seed().
+  d <- tempfile(pattern = "foreco_ckpt_", tmpdir = tempdir())
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  if (!dir.exists(d)) {
+    cli_abort("Failed to create checkpoint directory {.path {d}}.")
+  }
+  d
+}
+
+# Cheap conservative estimate of simultaneous peak bytes when all p models are
+# held in memory. `per_model` multipliers are order-of-magnitude correct:
+# randomForest stores full forests (large); mlr3 wraps learners + a copy of
+# training data; xgboost/lightgbm trees are compact relative to hat bytes.
+estimate_peak_bytes <- function(hat, approach, p) {
+  if (is.null(hat)) {
+    return(0)
+  }
+  hat_bytes <- as.numeric(NROW(hat)) * NCOL(hat) * 8
+  per_model <- switch(
+    approach,
+    "randomForest" = 5,
+    "mlr3" = 3,
+    "xgboost" = 0.5,
+    "lightgbm" = 0.3,
+    1
+  )
+  models <- hat_bytes * per_model * p
+  copies <- hat_bytes * 3
+  models + copies
+}
+
+# Returns available RAM in bytes, or NA_real_ on unknown OS / parse failure.
+# "auto" mode falls back to OFF when this returns NA.
+available_ram_bytes <- function() {
+  os <- Sys.info()[["sysname"]]
+  if (os == "Linux") {
+    info <- tryCatch(
+      readLines("/proc/meminfo"),
+      error = function(e) NULL
+    )
+    if (is.null(info)) {
+      return(NA_real_)
+    }
+    line <- grep("^MemAvailable:", info, value = TRUE)
+    if (length(line) == 0) {
+      line <- grep("^MemFree:", info, value = TRUE)
+    }
+    if (length(line) == 0) {
+      return(NA_real_)
+    }
+    kb <- as.numeric(regmatches(line, regexpr("\\d+", line)))
+    return(kb * 1024)
+  }
+  if (os == "Darwin") {
+    out <- tryCatch(system("vm_stat", intern = TRUE),
+                    error = function(e) NULL, warning = function(w) NULL)
+    if (is.null(out)) return(NA_real_)
+    # Page size (typically 4096 or 16384 on Apple Silicon)
+    ps_line <- grep("page size of", out, value = TRUE)
+    ps <- if (length(ps_line)) {
+      as.numeric(regmatches(ps_line, regexpr("\\d+", ps_line)))
+    } else 4096
+    get_pages <- function(label) {
+      l <- grep(label, out, value = TRUE, fixed = TRUE)
+      if (!length(l)) return(0)
+      as.numeric(sub("\\.$", "", regmatches(l, regexpr("\\d+", l))))
+    }
+    free  <- get_pages("Pages free:")
+    inact <- get_pages("Pages inactive:")
+    spec  <- get_pages("Pages speculative:")
+    return((free + inact + spec) * ps)
+  }
+  if (os == "Windows") {
+    out <- tryCatch(
+      system("wmic OS get FreePhysicalMemory /Value", intern = TRUE),
+      error = function(e) NULL,
+      warning = function(w) NULL
+    )
+    if (is.null(out)) {
+      return(NA_real_)
+    }
+    line <- grep("FreePhysicalMemory=", out, value = TRUE)
+    if (length(line) == 0) {
+      return(NA_real_)
+    }
+    kb <- as.numeric(sub(".*=", "", line))
+    return(kb * 1024)
+  }
+  NA_real_
+}
+
+# Per-approach serializer dispatch.
+# xgboost: serialize raw bytes via xgb.save.raw + qs_save (qs_save on a live
+#   xgb.Booster fails because of the external C++ pointer).
+# lightgbm: use native lgb.save (the same C++ pointer constraint applies).
+# everything else (randomForest, mlr3): qs2 round-trip is safe (verified).
+serialize_fit <- function(model, dir, i, approach) {
+  ext <- if (approach == "lightgbm") ".lgb" else ".qs2"
+  path <- file.path(dir, sprintf("fit_%d%s", i, ext))
+  switch(
+    approach,
+    "xgboost" = qs2::qs_save(xgboost::xgb.save.raw(model), path),
+    "lightgbm" = lightgbm::lgb.save(model, filename = path),
+    qs2::qs_save(model, path)
+  )
+  path
+}
+
+deserialize_fit <- function(path, approach) {
+  switch(
+    approach,
+    "xgboost" = xgboost::xgb.load.raw(qs2::qs_read(path)),
+    "lightgbm" = lightgbm::lgb.load(filename = path),
+    qs2::qs_read(path)
+  )
+}
+
+# Lazy-load accessor used by rml() at predict time. If `fit[[i]]` is a stored
+# path (string), reload from disk; otherwise return the in-memory model.
+get_fit_i <- function(obj, i) {
+  f <- obj$fit[[i]]
+  if (is.character(f) && length(f) == 1) {
+    return(deserialize_fit(f, obj$approach))
+  }
+  f
+}
+
 # Rombouts et al. (2025) matrix-form
 input2rtw <- function(x, kset) {
   x <- FoReco::FoReco2matrix(x, kset)
@@ -191,7 +360,8 @@ new_rml_fit <- function(
   framework = NULL,
   features = NULL,
   features_size = NULL,
-  block_sampling = NULL
+  block_sampling = NULL,
+  checkpoint_dir = NULL
 ) {
   framework <- match.arg(framework, choices = c("cs", "te", "ct"))
   structure(
@@ -205,7 +375,8 @@ new_rml_fit <- function(
       framework = framework,
       features = features,
       features_size = features_size,
-      block_sampling = block_sampling
+      block_sampling = block_sampling,
+      checkpoint_dir = checkpoint_dir
     ),
     class = "rml_fit"
   )

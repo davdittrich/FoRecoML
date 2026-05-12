@@ -15,7 +15,8 @@
 #' @usage
 #' # Reconciled forecasts
 #' csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
-#'       params = NULL, tuning = NULL, sntz = FALSE, round = FALSE, fit = NULL)
+#'       params = NULL, tuning = NULL, sntz = FALSE, round = FALSE,
+#'       fit = NULL, checkpoint = "auto")
 #'
 #' @param base A (\eqn{h \times n}) numeric matrix or multivariate time series
 #'   (\code{mts} class) containing the base forecasts to be reconciled; \eqn{h}
@@ -164,7 +165,8 @@ csrml <- function(
   tuning = NULL,
   sntz = FALSE,
   round = FALSE,
-  fit = NULL
+  fit = NULL,
+  checkpoint = "auto"
 ) {
   if (is.null(fit)) {
     if (missing(agg_mat)) {
@@ -269,7 +271,8 @@ csrml <- function(
     approach = approach,
     params = params,
     fit = fit,
-    tuning = tuning
+    tuning = tuning,
+    checkpoint = checkpoint
   )
 
   obj <- attr(reco_mat, "fit")
@@ -280,7 +283,8 @@ csrml <- function(
     approach = approach,
     framework = "cs",
     features = features,
-    features_size = n
+    features_size = n,
+    checkpoint_dir = obj$checkpoint_dir
   )
   attr(reco_mat, "fit") <- NULL
   reco_mat <- csbu(reco_mat, agg_mat = agg_mat, round = round, sntz = sntz)
@@ -300,7 +304,7 @@ csrml <- function(
 #' @usage
 #' # Pre-trained reconciled ML models
 #' csrml_fit(hat, obs, agg_mat, features = "all", approach = "randomForest",
-#'           params = NULL, tuning = NULL)
+#'           params = NULL, tuning = NULL, checkpoint = "auto")
 #'
 #' @return
 #'   - [csrml_fit] returns a fitted object that can be reused for
@@ -316,7 +320,8 @@ csrml_fit <- function(
   features = "all",
   approach = "randomForest",
   params = NULL,
-  tuning = NULL
+  tuning = NULL,
+  checkpoint = "auto"
 ) {
   if (missing(agg_mat)) {
     cli_abort(
@@ -389,7 +394,8 @@ csrml_fit <- function(
     sel_mat = sel_mat,
     approach = approach,
     params = params,
-    tuning = tuning
+    tuning = tuning,
+    checkpoint = checkpoint
   )
 
   obj <- new_rml_fit(
@@ -399,7 +405,8 @@ csrml_fit <- function(
     approach = approach,
     framework = "cs",
     features = features,
-    features_size = ncol(hat)
+    features_size = ncol(hat),
+    checkpoint_dir = obj$checkpoint_dir
   )
 
   return(obj)
