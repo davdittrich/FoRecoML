@@ -381,3 +381,14 @@ new_rml_fit <- function(
     class = "rml_fit"
   )
 }
+
+# Identify feature columns of `hat` with NA rate >= threshold.
+# Returns logical vector of length NCOL(hat).
+# Uses sum/threshold*NROW form to preserve TRUE-everywhere semantics at NROW=0.
+na_col_mask <- function(hat, threshold = 0.75) {
+  vapply(
+    seq_len(NCOL(hat)),
+    function(j) sum(is.na(hat[, j])) >= threshold * NROW(hat),
+    logical(1)
+  )
+}

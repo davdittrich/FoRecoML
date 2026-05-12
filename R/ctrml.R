@@ -385,11 +385,7 @@ ctrml <- function(
     # Remove NA variables from sel_mat. For the slice-first (non-mfh) path,
     # NA detection runs on the already-sliced hat and we map local NA columns
     # back to global sel_mat row indices via keep_cols.
-    na_local <- vapply(
-      seq_len(NCOL(hat)),
-      function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
-      logical(1)
-    )
+    na_local <- na_col_mask(hat)
     if (any(na_local)) {
       if (is.null(keep_cols)) {
         # mfh path: hat is the full materialization; sel_mat is sized to it.
@@ -689,11 +685,7 @@ ctrml_fit <- function(
   }
 
   # Remove NA variables from sel_mat (slice-first aware).
-  na_local <- vapply(
-    seq_len(NCOL(hat)),
-    function(j) sum(is.na(hat[, j])) >= 0.75 * NROW(hat),
-    logical(1)
-  )
+  na_local <- na_col_mask(hat)
   if (any(na_local)) {
     if (is.null(keep_cols)) {
       if (NCOL(sel_mat) == 1) {
