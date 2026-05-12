@@ -151,7 +151,10 @@ rml <- function(
       tmp$fit <- path_i
     }
 
-    out[[i]] <- tmp
+    # mw3.3: on predict-reuse, store only bts so the deserialized model is
+    # released when `tmp` goes out of scope at end of this iteration, rather
+    # than being retained in out[[i]]$fit until the loop finishes.
+    out[[i]] <- if (is.null(fit)) tmp else list(bts = tmp$bts)
     rm(X, y, Xtest, fit_i)
     if (!is.null(checkpoint_dir)) {
       gc(verbose = FALSE)
