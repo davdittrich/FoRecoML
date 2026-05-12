@@ -332,7 +332,7 @@ rml.randomForest <- function(
 
   bts <- NULL
   if (!is.null(Xtest)) {
-    bts <- as.vector(predict(fit, Xtest))
+    bts <- predict(fit, Xtest)
   }
 
   if (is.null(bts) && is.null(fit)) {
@@ -397,7 +397,7 @@ rml.xgboost <- function(
   bts <- NULL
   if (!is.null(Xtest)) {
     test <- xgb.DMatrix(data = Xtest)
-    bts <- as.vector(predict(fit, test))
+    bts <- predict(fit, test)
   }
 
   if (is.null(bts) && is.null(fit)) {
@@ -464,7 +464,7 @@ rml.lightgbm <- function(
   bts <- NULL
   if (!is.null(Xtest)) {
     Xtest <- as.matrix(Xtest)
-    bts <- as.vector(predict(fit, Xtest))
+    bts <- predict(fit, Xtest)
   }
 
   if (is.null(bts) && is.null(fit)) {
