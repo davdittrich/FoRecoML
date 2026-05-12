@@ -315,9 +315,12 @@ input2rtw_partial <- function(x, kset, cols) {
 }
 
 # Build a column-replicated sparse 0/1 indicator matrix:
-# sparse `length(idx) x n_cols` where each column equals `idx` (0/1 mask).
-# Avoids the dense rep(idx, n_cols) allocation done by
-# Matrix(rep(idx, n_cols), ncol=n_cols, sparse=TRUE).
+# `length(idx) x n_cols` sparse matrix where each column equals `idx`.
+#
+# Cheaper than `Matrix(rep(idx, n_cols), ncol = n_cols, sparse = TRUE)`
+# when `idx` is sparse (nnz << length(idx)): allocates two integer
+# index vectors of size `nnz * n_cols`, vs the legacy form's
+# `length(idx) * n_cols` doubles in the data vector.
 sparse_col_replicate <- function(idx, n_cols) {
   nz <- which(idx != 0)
   Matrix::sparseMatrix(
