@@ -316,7 +316,7 @@ rml.xgboost <- function(
 
   bts <- NULL
   if (!is.null(Xtest)) {
-    test <- xgb.DMatrix(data = as.matrix(Xtest))
+    test <- xgb.DMatrix(data = Xtest)
     bts <- as.vector(predict(fit, test))
   }
 
@@ -382,7 +382,7 @@ rml.lightgbm <- function(
 
   bts <- NULL
   if (!is.null(Xtest)) {
-    bts <- as.vector(predict(fit, as.matrix(Xtest)))
+    bts <- as.vector(predict(fit, Xtest))
   }
 
   if (is.null(bts) && is.null(fit)) {
