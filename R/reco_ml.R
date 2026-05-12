@@ -152,7 +152,7 @@ rml.mlr3 <- function(
         tuning$resampling <- mlr3::rsmp("cv", folds = 5)
       }
       if (is.null(tuning$store_benchmark_result)) {
-        tuning$store_benchmark_result <- TRUE
+        tuning$store_benchmark_result <- FALSE
       }
       if (is.null(tuning$store_models)) {
         tuning$store_models <- FALSE
