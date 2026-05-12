@@ -29,7 +29,6 @@ rml <- function(
 
   if (is.null(fit)) {
     hat <- unname(hat)
-    hat <- as.data.frame(hat)
     obs <- unname(obs)
     p <- NCOL(obs)
 
@@ -43,7 +42,6 @@ rml <- function(
 
   if (!is.null(base)) {
     base <- unname(base)
-    base <- as.data.frame(base)
   }
 
   out <- lapply(1:p, function(i) {
@@ -143,7 +141,7 @@ rml.mlr3 <- function(
     }
 
     params$.key <- ifelse(is.null(params$.key), "regr.ranger", params$.key)
-    tsk_i <- cbind(y = y, X)
+    tsk_i <- data.frame(y = y, X, check.names = FALSE)
     tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
     fit <- do.call(lrn, params)
     if (!is.null(tuning)) {
@@ -165,7 +163,7 @@ rml.mlr3 <- function(
 
       if (!is.null(block_sampling)) {
         rownames(X) <- NULL
-        tsk_i <- cbind(y = y, X, id = rep(1:NROW(X), each = block_sampling))
+        tsk_i <- data.frame(y = y, X, id = rep(1:NROW(X), each = block_sampling), check.names = FALSE)
         tsk_i <- mlr3::as_task_regr(tsk_i, target = "y")
         # tsk_i$encapsulate("evaluate", fallback = lrn("regr.featureless"))
         tsk_i$col_roles$group <- "id"
@@ -196,7 +194,7 @@ rml.mlr3 <- function(
 
   bts <- NULL
   if (!is.null(Xtest)) {
-    bts <- fit$predict_newdata(Xtest)$response
+    bts <- fit$predict_newdata(data.frame(Xtest, check.names = FALSE))$response
   }
 
   if (is.null(bts) && is.null(fit)) {
@@ -307,7 +305,7 @@ rml.xgboost <- function(
       nrounds <- ifelse(is.null(params$nrounds), 100, params$nrounds)
     }
 
-    train <- xgb.DMatrix(data = as.matrix(X), label = y)
+    train <- xgb.DMatrix(data = X, label = y)
     fit <- xgb.train(
       data = train,
       nrounds = nrounds,
@@ -318,7 +316,7 @@ rml.xgboost <- function(
 
   bts <- NULL
   if (!is.null(Xtest)) {
-    test <- xgb.DMatrix(data = as.matrix(Xtest))
+    test <- xgb.DMatrix(data = Xtest)
     bts <- as.vector(predict(fit, test))
   }
 
@@ -373,7 +371,8 @@ rml.lightgbm <- function(
     } else {
       nrounds <- ifelse(is.null(params$nrounds), 100, params$nrounds)
     }
-    train <- lgb.Dataset(data = as.matrix(X), label = y)
+    X <- as.matrix(X)
+    train <- lgb.Dataset(data = X, label = y)
     fit <- lgb.train(
       data = train,
       params = params,
@@ -384,7 +383,8 @@ rml.lightgbm <- function(
 
   bts <- NULL
   if (!is.null(Xtest)) {
-    bts <- as.vector(predict(fit, as.matrix(Xtest)))
+    Xtest <- as.matrix(Xtest)
+    bts <- as.vector(predict(fit, Xtest))
   }
 
   if (is.null(bts) && is.null(fit)) {
