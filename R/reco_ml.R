@@ -58,7 +58,7 @@ rml <- function(
   # Only meaningful during training (fit=NULL). On fit reuse, the stored fit
   # already encodes whether models are paths or in-memory; we never re-decide.
   checkpoint_dir <- if (is.null(fit)) {
-    resolve_checkpoint(checkpoint, hat, class_base, p)
+    resolve_checkpoint(checkpoint, hat, class_base, p, n_workers = n_workers_resolved)
   } else {
     NULL
   }

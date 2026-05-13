@@ -100,7 +100,7 @@ print.rml_fit <- function(x, ...) {
 #     where available_ram_bytes() returns NA.
 #   - character path: always enable; uses that exact directory (persistent,
 #     suitable for fit reuse across sessions).
-resolve_checkpoint <- function(checkpoint, hat, approach, p) {
+resolve_checkpoint <- function(checkpoint, hat, approach, p, n_workers = 1L) {
   if (identical(checkpoint, FALSE) || identical(checkpoint, "false")) {
     return(NULL)
   }
@@ -109,9 +109,9 @@ resolve_checkpoint <- function(checkpoint, hat, approach, p) {
   }
   if (is.character(checkpoint) && length(checkpoint) == 1) {
     if (checkpoint == "auto") {
-      est <- estimate_peak_bytes(hat, approach, p)
+      est <- estimate_peak_bytes(hat, approach, p) * max(1L, as.integer(n_workers))
       avail <- available_ram_bytes()
-      if (is.finite(est) && is.finite(avail) && est > 0.8 * avail) {
+      if (is.finite(est) && is.finite(avail) && est > 0.5 * avail) {
         return(checkpoint_session_dir())
       }
       return(NULL)
