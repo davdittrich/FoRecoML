@@ -51,6 +51,19 @@ rml <- function(
     params <- cap_inner_threads(params, n_workers_resolved, approach = class_base)
   }
 
+  # spd.10 — predict-reuse safety: in-memory booster list copied to N daemons = OOM.
+  if (n_workers_resolved > 1L &&
+      !is.null(fit) &&
+      !is.null(fit$fit) &&
+      length(fit$fit) > 0L &&
+      !is.character(fit$fit[[1]])) {
+    cli::cli_inform(c(
+      "!" = "{.arg fit} holds {length(fit$fit)} in-memory model(s); copying to {n_workers_resolved} workers would risk OOM.",
+      "i" = "Auto-capping {.arg n_workers} = 1. Train with {.code checkpoint = TRUE} (or a path) for parallel predict-reuse."
+    ))
+    n_workers_resolved <- 1L
+  }
+
   # Capture dots BEFORE the loop so they can be forwarded via .args.
   dots <- list(...)
 

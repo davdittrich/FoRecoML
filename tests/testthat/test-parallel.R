@@ -233,3 +233,58 @@ test_that("checkpoint=path + n_workers=2 (xgboost) <= 1e-12 vs n_workers=1", {
   expect_equal(as.numeric(r_seq), as.numeric(r_par), tolerance = 1e-12)
   expect_equal(mirai::status()$connections, 0L)
 })
+
+# ---------------------------------------------------------------------------
+# 10. spd.10: in-memory fit + n_workers>1 auto-caps to 1 with cli_inform.
+# ---------------------------------------------------------------------------
+test_that("spd.10: in-memory fit + n_workers>1 auto-caps to 1 with cli_inform", {
+  skip_if_not_installed("randomForest")
+  fx <- make_cs_fixture(seed = 42L, N_hat = 30L)
+  set.seed(42)
+  mdl_mem <- csrml_fit(
+    hat = fx$hat, obs = fx$obs, agg_mat = fx$agg_mat,
+    approach = "randomForest",
+    params = list(ntree = 5L),
+    checkpoint = FALSE,
+    n_workers = 1L
+  )
+  expect_false(is.character(mdl_mem$fit[[1]]))
+
+  # Verify cli_inform message emitted
+  expect_message(
+    csrml(base = fx$base, fit = mdl_mem, n_workers = 3L),
+    "in-memory model"
+  )
+
+  # Capture value separately (suppress message to avoid printing in test)
+  r_par <- suppressMessages(csrml(base = fx$base, fit = mdl_mem, n_workers = 3L))
+  r_seq <- csrml(base = fx$base, fit = mdl_mem, n_workers = 1L)
+  expect_equal(as.numeric(r_par), as.numeric(r_seq), tolerance = 1e-12)
+})
+
+# ---------------------------------------------------------------------------
+# 11. spd.10: path fit + n_workers>1 NOT auto-capped (guard skips).
+# ---------------------------------------------------------------------------
+test_that("spd.10: path fit + n_workers>1 NOT auto-capped", {
+  skip_if_not_installed("qs2")
+  skip_if_not_installed("xgboost")
+  fx <- make_cs_fixture(seed = 42L, N_hat = 30L)
+  td <- tempfile(); dir.create(td)
+  on.exit(unlink(td, recursive = TRUE), add = TRUE)
+  set.seed(42)
+  mdl_disk <- csrml_fit(
+    hat = fx$hat, obs = fx$obs, agg_mat = fx$agg_mat,
+    approach = "xgboost",
+    params = list(nthread = 1L, nrounds = 5L),
+    checkpoint = td,
+    n_workers = 1L
+  )
+  expect_true(is.character(mdl_disk$fit[[1]]))
+
+  # Path fit → NO message (guard skips). Bare call, no value capture.
+  expect_no_message(
+    csrml(base = fx$base, fit = mdl_disk, n_workers = 2L),
+    message = "in-memory"
+  )
+  on.exit(if (mirai::status()$connections > 0L) mirai::daemons(0), add = TRUE)
+})
