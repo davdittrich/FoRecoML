@@ -159,8 +159,10 @@ rml <- function(
       tmp$fit <- path_i
     }
 
-    # T6 — gc() every gc_every iterations under checkpoint mode.
-    if (!is.null(checkpoint_dir) && i %% gc_every == 0L) {
+    # T6 + spd.8 — gc() periodically under checkpoint mode OR on predict-reuse
+    # (where deserialized/in-memory boosters + lightgbm C++ scratch accumulate
+    # without explicit cleanup).
+    if ((!is.null(checkpoint_dir) || !is.null(fit)) && i %% gc_every == 0L) {
       gc(verbose = FALSE)
     }
 
