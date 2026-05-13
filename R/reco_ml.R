@@ -10,6 +10,7 @@ rml <- function(
   keep_cols = NULL,
   checkpoint = "auto",
   n_workers = "auto",
+  kset = NULL,
   ...
 ) {
   class_base <- approach
@@ -98,9 +99,11 @@ rml <- function(
       col_map <- NULL
     }
   } else {
-    # T5: hat/base pre-sliced. active_ncol = full feature count from sel_mat.
+    # T5: active_ncol = full feature count from sel_mat.
+    # spd.12: when kset is non-NULL, hat/base are raw (not pre-expanded); derive
+    # active_ncol from sel_mat or keep_cols (not from NCOL(hat/base)).
     active_ncol <- if (length(sel_mat) == 1) {
-      if (!is.null(hat)) NCOL(hat) else NCOL(base)
+      max(keep_cols)  # total_cols, works for raw and pre-expanded hat/base
     } else if (is(sel_mat, "sparseVector")) {
       length(sel_mat)
     } else {
@@ -111,10 +114,10 @@ rml <- function(
   }
 
   # Per-series loop body with all closure-captured objects as explicit formals.
-  # This signature must stay in sync with the 13-item closure list spec.
+  # This signature must stay in sync with the 14-item closure list spec.
   loop_body <- function(i, hat, obs, base, sel_mat, col_map,
                         class_base, approach, active_ncol,
-                        params, fit, checkpoint_dir, dots) {
+                        params, fit, checkpoint_dir, kset, dots) {
     gc_every <- 5L
 
     global_id <- if (length(sel_mat) == 1) {
@@ -125,16 +128,26 @@ rml <- function(
       which(sel_mat[, i] != 0)
     }
     id <- if (is.null(col_map)) global_id else { x <- col_map[global_id]; x[!is.na(x)] }
+    global_id_post_na <- global_id
 
     if (is.null(fit)) {
       y <- obs[, i]
-      X <- hat[, id, drop = FALSE]
+      if (is.null(kset)) {
+        X <- hat[, id, drop = FALSE]
+      } else {
+        X <- FoRecoML:::input2rtw_partial(hat, kset, cols = global_id)
+        na_cols <- FoRecoML:::na_col_mask(X)
+        if (any(na_cols)) {
+          X <- X[, !na_cols, drop = FALSE]
+          global_id_post_na <- global_id[!na_cols]
+        }
+      }
       fit_i <- NULL
 
       if (anyNA(X)) {
-        X <- na.omit(X)
-        if (length(attr(X, "na.action")) > 0) {
-          if (NROW(X) == 0) {
+        X <- stats::na.omit(X)
+        if (length(attr(X, "na.action")) > 0L) {
+          if (NROW(X) == 0L) {
             cli::cli_abort(
               paste0(
                 "All the predictor variables for series {.val {i}} contain ",
@@ -155,7 +168,11 @@ rml <- function(
     }
 
     if (!is.null(base)) {
-      Xtest <- base[, id, drop = FALSE]
+      if (is.null(kset)) {
+        Xtest <- base[, id, drop = FALSE]
+      } else {
+        Xtest <- FoRecoML:::input2rtw_partial(base, kset, cols = global_id_post_na)
+      }
     } else {
       Xtest <- NULL
     }
@@ -192,7 +209,7 @@ rml <- function(
         i, hat = hat, obs = obs, base = base, sel_mat = sel_mat,
         col_map = col_map, class_base = class_base, approach = approach,
         active_ncol = active_ncol, params = params, fit = fit,
-        checkpoint_dir = checkpoint_dir, dots = dots
+        checkpoint_dir = checkpoint_dir, kset = kset, dots = dots
       )
     }
     result
@@ -211,7 +228,7 @@ rml <- function(
         hat = hat, obs = obs, base = base, sel_mat = sel_mat,
         col_map = col_map, class_base = class_base, approach = approach,
         active_ncol = active_ncol, params = params, fit = fit,
-        checkpoint_dir = checkpoint_dir, dots = dots
+        checkpoint_dir = checkpoint_dir, kset = kset, dots = dots
       )
     )[]
   }

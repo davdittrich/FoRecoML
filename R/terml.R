@@ -252,18 +252,20 @@ terml <- function(
     )
     attr(sel_mat, "sel_method") <- features
 
-    # T5: slice-first materialization for non-mfh.
+    # T5: compute keep_cols for features_size; hat row-expansion deferred to loop_body.
     if (!grepl("mfh", features)) {
       keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
-      hat <- input2rtw_partial(hat, kset, cols = keep_cols)
     } else {
       keep_cols <- NULL
     }
 
-    # Remove NA variables from sel_mat (slice-first aware).
-    na_local <- na_col_mask(hat)
-    if (any(na_local)) {
-      if (is.null(keep_cols)) {
+    # Remove NA variables from sel_mat. For non-mfh (spd.12), NA detection is
+    # deferred to loop_body per-series via kset. For mfh, NA detection runs on
+    # the fully-materialized hat.
+    if (is.null(keep_cols)) {
+      # mfh path: hat is the full materialization; sel_mat is sized to it.
+      na_local <- na_col_mask(hat)
+      if (any(na_local)) {
         if (NCOL(sel_mat) == 1) {
           if (length(sel_mat) == 1) {
             sel_mat <- rep(sel_mat, NCOL(hat))
@@ -273,19 +275,6 @@ terml <- function(
         } else {
           sel_mat[na_local, ] <- 0
         }
-      } else {
-        na_global <- keep_cols[na_local]
-        if (NCOL(sel_mat) == 1) {
-          if (length(sel_mat) == 1) {
-            sel_mat <- rep(sel_mat, total_cols)
-          }
-          sel_mat[na_global] <- 0
-          sel_mat <- as(sel_mat, "sparseVector")
-        } else {
-          sel_mat[na_global, ] <- 0
-        }
-        hat <- hat[, !na_local, drop = FALSE]
-        keep_cols <- keep_cols[!na_local]
       }
     }
   } else {
@@ -326,23 +315,26 @@ terml <- function(
     cli_abort("Incorrect {.arg base} length.", call = NULL)
   } else {
     h <- length(base) / kt
-    if (!grepl("mfh", features)) {
-      base <- input2rtw_partial(base, kset, cols = keep_cols)
-    } else {
+    if (grepl("mfh", features)) {
       base <- vec2hmat(vec = base, h = h, kset = kset)
     }
+    # non-mfh: base row-expansion deferred to loop_body via kset
   }
 
-  expected_base_ncol <- if (is.null(keep_cols)) features_size else length(keep_cols)
-  if (NCOL(base) != expected_base_ncol) {
-    cli_abort(
-      paste0(
-        "The number of columns of {.arg base} ",
-        "must be equal to the number of ",
-        "features used during fitting."
-      ),
-      call = NULL
-    )
+  # Validate base column count for mfh path (post-materialization check).
+  # Non-mfh: raw base dimensions already validated by length(base) %% kt check above.
+  if (is.null(keep_cols)) {
+    expected_base_ncol <- features_size
+    if (NCOL(base) != expected_base_ncol) {
+      cli_abort(
+        paste0(
+          "The number of columns of {.arg base} ",
+          "must be equal to the number of ",
+          "features used during fitting."
+        ),
+        call = NULL
+      )
+    }
   }
 
   reco_mat <- rml(
@@ -357,7 +349,8 @@ terml <- function(
     block_sampling = block_sampling,
     keep_cols = keep_cols,
     checkpoint = checkpoint,
-    n_workers = n_workers
+    n_workers = n_workers,
+    kset = kset
   )
 
   obj <- attr(reco_mat, "fit")
@@ -496,18 +489,20 @@ terml_fit <- function(
   )
   attr(sel_mat, "sel_method") <- features
 
-  # T5: slice-first materialization for non-mfh.
+  # T5: compute keep_cols for features_size; hat row-expansion deferred to loop_body.
   if (!grepl("mfh", features)) {
     keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
-    hat <- input2rtw_partial(hat, kset, cols = keep_cols)
   } else {
     keep_cols <- NULL
   }
 
-  # Remove NA variables from sel_mat (slice-first aware).
-  na_local <- na_col_mask(hat)
-  if (any(na_local)) {
-    if (is.null(keep_cols)) {
+  # Remove NA variables from sel_mat. For non-mfh (spd.12), NA detection is
+  # deferred to loop_body per-series via kset. For mfh, NA detection runs on
+  # the fully-materialized hat.
+  if (is.null(keep_cols)) {
+    # mfh path: hat is the full materialization; sel_mat is sized to it.
+    na_local <- na_col_mask(hat)
+    if (any(na_local)) {
       if (NCOL(sel_mat) == 1) {
         if (length(sel_mat) == 1) {
           sel_mat <- rep(sel_mat, NCOL(hat))
@@ -517,19 +512,6 @@ terml_fit <- function(
       } else {
         sel_mat[na_local, ] <- 0
       }
-    } else {
-      na_global <- keep_cols[na_local]
-      if (NCOL(sel_mat) == 1) {
-        if (length(sel_mat) == 1) {
-          sel_mat <- rep(sel_mat, total_cols)
-        }
-        sel_mat[na_global] <- 0
-        sel_mat <- as(sel_mat, "sparseVector")
-      } else {
-        sel_mat[na_global, ] <- 0
-      }
-      hat <- hat[, !na_local, drop = FALSE]
-      keep_cols <- keep_cols[!na_local]
     }
   }
 
@@ -545,7 +527,8 @@ terml_fit <- function(
     block_sampling = block_sampling,
     keep_cols = keep_cols,
     checkpoint = checkpoint,
-    n_workers = n_workers
+    n_workers = n_workers,
+    kset = kset
   )
 
   obj <- new_rml_fit(
