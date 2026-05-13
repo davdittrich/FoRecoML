@@ -116,20 +116,22 @@ rml <- function(
       X <- hat[, id, drop = FALSE]
       fit_i <- NULL
 
-      X <- na.omit(X)
-      if (length(attr(X, "na.action")) > 0) {
-        if (NROW(X) == 0) {
-          cli::cli_abort(
-            paste0(
-              "All the predictor variables for series {.val {i}} contain ",
-              "{.code NA} values after applying {.fn na.omit}. ",
-              "Please check your {.arg hat} input or consider using ",
-              "another {.arg features} option."
-            ),
-            call = NULL
-          )
+      if (anyNA(X)) {
+        X <- na.omit(X)
+        if (length(attr(X, "na.action")) > 0) {
+          if (NROW(X) == 0) {
+            cli::cli_abort(
+              paste0(
+                "All the predictor variables for series {.val {i}} contain ",
+                "{.code NA} values after applying {.fn na.omit}. ",
+                "Please check your {.arg hat} input or consider using ",
+                "another {.arg features} option."
+              ),
+              call = NULL
+            )
+          }
+          y <- y[-attr(X, "na.action")]
         }
-        y <- y[-attr(X, "na.action")]
       }
     } else {
       y <- X <- NULL
