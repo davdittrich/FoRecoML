@@ -336,13 +336,14 @@ terml <- function(
       )
     }
   } else if (!is.null(fit) && !grepl("mfh", features)) {
-    # Early validation for non-mfh kset predict-reuse: base must have exactly kt * h elements.
-    # Prevents silent wrong predictions or cryptic dim-mismatch from ML library.
-    if (length(base) != kt * h) {
-      cli::cli_abort(
-        "`base` has {length(base)} elements; expected {kt * h} ({kt} kt × {h} h)",
-        call = NULL
-      )
+    # Horizon mismatch guard: compare predict-time h against training h_train.
+    # h_train is stored at fit time; NULL guard preserves back-compat for old fits.
+    if (!is.null(fit$h_train) && h != fit$h_train) {
+      cli::cli_abort(c(
+        "`base` horizon mismatch with training fit.",
+        "i" = "Training fit was built with h = {fit$h_train}.",
+        "x" = "Got base with implied h = {h} (= length(base) / kt)."
+      ), call = NULL)
     }
   }
 
@@ -374,7 +375,8 @@ terml <- function(
     features_size = features_size,
     block_sampling = block_sampling,
     checkpoint_dir = obj$checkpoint_dir,
-    na_cols_list = obj$na_cols_list
+    na_cols_list = obj$na_cols_list,
+    h_train = h
   )
 
   attr(reco_mat, "fit") <- NULL
@@ -541,6 +543,11 @@ terml_fit <- function(
     kset = kset
   )
 
+  # h_train is the forecast horizon used at fit time.
+  # For mfh path h is already computed from hat.
+  # For non-mfh path, terml_fit has no base → no forecast horizon → leave NULL.
+  h_train <- if (grepl("mfh", features)) h else NULL
+
   obj <- new_rml_fit(
     fit = obj$fit,
     agg_order = agg_order,
@@ -552,7 +559,8 @@ terml_fit <- function(
     features_size = total_cols,
     block_sampling = block_sampling,
     checkpoint_dir = obj$checkpoint_dir,
-    na_cols_list = obj$na_cols_list
+    na_cols_list = obj$na_cols_list,
+    h_train = h_train
   )
 
   return(obj)

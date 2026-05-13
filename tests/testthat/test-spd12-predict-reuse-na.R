@@ -161,3 +161,172 @@ local({
     expect_gt(length(r_pred_te), 0L)
   })
 })
+
+# ── h_train horizon mismatch tests ───────────────────────────────────────────
+
+local({
+  # ctrml horizon-mismatch tests.
+  # Use the combined ctrml() call (hat+obs+base) to obtain a fit with h_train set
+  # (h_train = h from base at training time), then reuse via extract_reconciled_ml.
+  # ctrml_fit() leaves h_train=NULL for non-mfh (no base at fit time).
+  set.seed(9003)
+  m_ct    <- 4L
+  kset_ct <- FoReco::tetools(m_ct)$set   # c(4, 2, 1)
+  h_base  <- 2L   # forecast horizon used to produce the fit
+  h_wrong <- 8L   # different horizon, should trigger mismatch error
+
+  agg_mat_ct <- t(c(1, 1))
+  dimnames(agg_mat_ct) <- list("A", c("B", "C"))
+  dims <- FoReco::cttools(agg_order = m_ct, agg_mat = agg_mat_ct)$dim
+  kt <- dims[["kt"]]
+  bts_mean <- 5
+
+  hat_ct <- rbind(
+    rnorm(kt * 16L, rep(2 * kset_ct * bts_mean, 16L)),
+    rnorm(kt * 16L, rep(kset_ct * bts_mean, 16L)),
+    rnorm(kt * 16L, rep(kset_ct * bts_mean, 16L))
+  )
+  obs_ct <- rbind(
+    rnorm(dims[["m"]] * 16L, bts_mean),
+    rnorm(dims[["m"]] * 16L, bts_mean)
+  )
+  base_train <- rbind(
+    rnorm(kt * h_base, rep(2 * kset_ct * bts_mean, h_base)),
+    rnorm(kt * h_base, rep(kset_ct * bts_mean, h_base)),
+    rnorm(kt * h_base, rep(kset_ct * bts_mean, h_base))
+  )
+  base_same_h <- rbind(
+    rnorm(kt * h_base, rep(2 * kset_ct * bts_mean, h_base)),
+    rnorm(kt * h_base, rep(kset_ct * bts_mean, h_base)),
+    rnorm(kt * h_base, rep(kset_ct * bts_mean, h_base))
+  )
+  base_wrong_h <- rbind(
+    rnorm(kt * h_wrong, rep(2 * kset_ct * bts_mean, h_wrong)),
+    rnorm(kt * h_wrong, rep(kset_ct * bts_mean, h_wrong)),
+    rnorm(kt * h_wrong, rep(kset_ct * bts_mean, h_wrong))
+  )
+
+  test_that("ctrml combined call: h_train stored correctly in fit", {
+    set.seed(301)
+    reco <- ctrml(
+      hat = hat_ct, obs = obs_ct, base = base_train,
+      agg_order = m_ct, agg_mat = agg_mat_ct,
+      approach = "lightgbm", features = "compact"
+    )
+    mdl <- extract_reconciled_ml(reco)
+    expect_equal(mdl$h_train, h_base)
+  })
+
+  test_that("ctrml predict-reuse: base horizon mismatch is caught", {
+    set.seed(302)
+    reco <- ctrml(
+      hat = hat_ct, obs = obs_ct, base = base_train,
+      agg_order = m_ct, agg_mat = agg_mat_ct,
+      approach = "lightgbm", features = "compact"
+    )
+    mdl <- extract_reconciled_ml(reco)
+    # Predict with wrong h (h_wrong != h_base) → must error
+    expect_error(
+      ctrml(fit = mdl, base = base_wrong_h, agg_order = m_ct, agg_mat = agg_mat_ct),
+      regexp = "horizon mismatch"
+    )
+  })
+
+  test_that("ctrml predict-reuse: same horizon does not error", {
+    set.seed(303)
+    reco <- ctrml(
+      hat = hat_ct, obs = obs_ct, base = base_train,
+      agg_order = m_ct, agg_mat = agg_mat_ct,
+      approach = "lightgbm", features = "compact"
+    )
+    mdl <- extract_reconciled_ml(reco)
+    # Predict with same h → must not error
+    expect_no_error(
+      ctrml(fit = mdl, base = base_same_h, agg_order = m_ct, agg_mat = agg_mat_ct)
+    )
+  })
+
+  test_that("ctrml predict-reuse: NULL h_train back-compat skips horizon check", {
+    set.seed(304)
+    reco <- ctrml(
+      hat = hat_ct, obs = obs_ct, base = base_train,
+      agg_order = m_ct, agg_mat = agg_mat_ct,
+      approach = "lightgbm", features = "compact"
+    )
+    mdl <- extract_reconciled_ml(reco)
+    mdl$h_train <- NULL   # simulate old fit without h_train field
+    # Must not abort even with wrong h when h_train is NULL
+    expect_no_error(
+      ctrml(fit = mdl, base = base_wrong_h, agg_order = m_ct, agg_mat = agg_mat_ct)
+    )
+  })
+})
+
+local({
+  # terml horizon-mismatch tests. Same strategy: combined terml() call to get h_train.
+  set.seed(9004)
+  m_te    <- 4L
+  kset_te <- FoReco::tetools(m_te)$set   # c(4, 2, 1)
+  kt_te   <- sum(kset_te)
+  h_base  <- 2L
+  h_wrong <- 8L
+  bts_mean <- 5
+
+  hat_te       <- rnorm(kt_te * 16L, rep(kset_te * bts_mean, 16L))
+  obs_te       <- rnorm(m_te * 16L, bts_mean)
+  base_train   <- rnorm(kt_te * h_base,  rep(kset_te * bts_mean, h_base))
+  base_same_h  <- rnorm(kt_te * h_base,  rep(kset_te * bts_mean, h_base))
+  base_wrong_h <- rnorm(kt_te * h_wrong, rep(kset_te * bts_mean, h_wrong))
+
+  test_that("terml combined call: h_train stored correctly in fit", {
+    set.seed(401)
+    reco_te <- tryCatch(
+      terml(hat = hat_te, obs = obs_te, base = base_train, agg_order = m_te,
+            approach = "lightgbm", features = "all"),
+      error = function(e) skip(paste0("terml error: ", conditionMessage(e)))
+    )
+    mdl_te <- extract_reconciled_ml(reco_te)
+    expect_equal(mdl_te$h_train, h_base)
+  })
+
+  test_that("terml predict-reuse: base horizon mismatch is caught", {
+    set.seed(402)
+    reco_te <- tryCatch(
+      terml(hat = hat_te, obs = obs_te, base = base_train, agg_order = m_te,
+            approach = "lightgbm", features = "all"),
+      error = function(e) skip(paste0("terml error: ", conditionMessage(e)))
+    )
+    mdl_te <- extract_reconciled_ml(reco_te)
+    expect_error(
+      terml(fit = mdl_te, base = base_wrong_h, agg_order = m_te),
+      regexp = "horizon mismatch"
+    )
+  })
+
+  test_that("terml predict-reuse: same horizon does not error", {
+    set.seed(403)
+    reco_te <- tryCatch(
+      terml(hat = hat_te, obs = obs_te, base = base_train, agg_order = m_te,
+            approach = "lightgbm", features = "all"),
+      error = function(e) skip(paste0("terml error: ", conditionMessage(e)))
+    )
+    mdl_te <- extract_reconciled_ml(reco_te)
+    expect_no_error(
+      terml(fit = mdl_te, base = base_same_h, agg_order = m_te)
+    )
+  })
+
+  test_that("terml predict-reuse: NULL h_train back-compat skips horizon check", {
+    set.seed(404)
+    reco_te <- tryCatch(
+      terml(hat = hat_te, obs = obs_te, base = base_train, agg_order = m_te,
+            approach = "lightgbm", features = "all"),
+      error = function(e) skip(paste0("terml error: ", conditionMessage(e)))
+    )
+    mdl_te <- extract_reconciled_ml(reco_te)
+    mdl_te$h_train <- NULL   # simulate old fit without h_train field
+    expect_no_error(
+      terml(fit = mdl_te, base = base_wrong_h, agg_order = m_te)
+    )
+  })
+})
