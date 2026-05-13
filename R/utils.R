@@ -419,7 +419,8 @@ new_rml_fit <- function(
   features = NULL,
   features_size = NULL,
   block_sampling = NULL,
-  checkpoint_dir = NULL
+  checkpoint_dir = NULL,
+  na_cols_list = NULL
 ) {
   framework <- match.arg(framework, choices = c("cs", "te", "ct"))
   structure(
@@ -434,7 +435,8 @@ new_rml_fit <- function(
       features = features,
       features_size = features_size,
       block_sampling = block_sampling,
-      checkpoint_dir = checkpoint_dir
+      checkpoint_dir = checkpoint_dir,
+      na_cols_list = na_cols_list
     ),
     class = "rml_fit"
   )

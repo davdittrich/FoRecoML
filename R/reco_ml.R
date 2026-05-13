@@ -130,16 +130,22 @@ rml <- function(
     id <- if (is.null(col_map)) global_id else { x <- col_map[global_id]; x[!is.na(x)] }
     global_id_post_na <- global_id
 
+    na_mask <- NULL  # per-series NA column mask; persisted into fit for predict-reuse
+
     if (is.null(fit)) {
       y <- obs[, i]
       if (is.null(kset)) {
         X <- hat[, id, drop = FALSE]
       } else {
+        # Per-iter FoReco2matrix call: O(n_series) regression for ctrml.
+        # Future opt: pre-compute parts once in rml(), pass to closure (smaller than expanded form).
+        # See spd.14 (TBD ticket).
         X <- FoRecoML:::input2rtw_partial(hat, kset, cols = global_id)
         na_cols <- FoRecoML:::na_col_mask(X)
         if (any(na_cols)) {
           X <- X[, !na_cols, drop = FALSE]
           global_id_post_na <- global_id[!na_cols]
+          na_mask <- na_cols  # persist: which expanded cols were NA-dropped for this series
         }
       }
       fit_i <- NULL
@@ -165,6 +171,15 @@ rml <- function(
       y <- X <- NULL
       # T6 — lazy-load: fit$fit[[i]] may be a path (checkpointed) or model.
       fit_i <- FoRecoML:::get_fit_i(fit, i)
+      # Replay train-time NA column mask for kset path (CRITICAL: spd.12 fix-up).
+      # Without this, global_id_post_na == global_id (wider than fit was trained on)
+      # → dim-mismatch or silent wrong prediction. Back-compat: NULL means no NA mask.
+      if (!is.null(kset) && !is.null(fit$na_cols_list)) {
+        stored_na <- fit$na_cols_list[[i]]
+        if (!is.null(stored_na) && any(stored_na)) {
+          global_id_post_na <- global_id[!stored_na]
+        }
+      }
     }
 
     if (!is.null(base)) {
@@ -196,8 +211,9 @@ rml <- function(
       gc(verbose = FALSE)
     }
 
-    # mw3.3 invariant: on predict-reuse, store only bts.
-    if (is.null(fit)) list(bts = tmp$bts, fit = tmp$fit) else list(bts = tmp$bts)
+    # mw3.3 invariant: on predict-reuse, store only bts. na_mask is NULL on
+    # predict-reuse branch (ignored by the outer collector lapply).
+    if (is.null(fit)) list(bts = tmp$bts, fit = tmp$fit, na_mask = na_mask) else list(bts = tmp$bts)
   }
 
   # Dispatch: sequential (n_workers == 1) or parallel via mirai.
@@ -237,6 +253,10 @@ rml <- function(
     fit <- NULL
     fit$sel_mat <- sel_mat
     fit$fit <- lapply(out, `[[`, "fit")
+    # spd.12 fix-up: persist per-series NA column masks so predict-reuse on the
+    # kset path can reconstruct the correct global_id_post_na for each series.
+    # NULL entries (no NA columns) are preserved; the list is always length == p.
+    fit$na_cols_list <- lapply(out, `[[`, "na_mask")
     # T6 — stash approach + checkpoint_dir so the outer entry point can pass
     # them through to new_rml_fit() (predict reuse needs `approach` for the
     # serializer dispatch in get_fit_i()).

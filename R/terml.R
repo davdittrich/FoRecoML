@@ -335,6 +335,15 @@ terml <- function(
         call = NULL
       )
     }
+  } else if (!is.null(fit) && !grepl("mfh", features)) {
+    # Early validation for non-mfh kset predict-reuse: base must have exactly kt * h elements.
+    # Prevents silent wrong predictions or cryptic dim-mismatch from ML library.
+    if (length(base) != kt * h) {
+      cli::cli_abort(
+        "`base` has {length(base)} elements; expected {kt * h} ({kt} kt × {h} h)",
+        call = NULL
+      )
+    }
   }
 
   reco_mat <- rml(
@@ -364,7 +373,8 @@ terml <- function(
     features = features,
     features_size = features_size,
     block_sampling = block_sampling,
-    checkpoint_dir = obj$checkpoint_dir
+    checkpoint_dir = obj$checkpoint_dir,
+    na_cols_list = obj$na_cols_list
   )
 
   attr(reco_mat, "fit") <- NULL
@@ -541,7 +551,8 @@ terml_fit <- function(
     features = features,
     features_size = total_cols,
     block_sampling = block_sampling,
-    checkpoint_dir = obj$checkpoint_dir
+    checkpoint_dir = obj$checkpoint_dir,
+    na_cols_list = obj$na_cols_list
   )
 
   return(obj)
