@@ -21,3 +21,9 @@ CRAN-SUBMISSION
 AGENTS.md
 CLAUDE.md
 .claude/
+.serena/
+
+# Local debris (not for distribution)
+test_output.txt
+fix_infographics.py
+docs/reference/sprint_slide.md
