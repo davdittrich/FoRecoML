@@ -11,6 +11,8 @@ rml <- function(
   checkpoint = "auto",
   n_workers = "auto",
   kset = NULL,
+  h = NULL,
+  n = NULL,
   ...
 ) {
   class_base <- approach
@@ -114,10 +116,10 @@ rml <- function(
   }
 
   # Per-series loop body with all closure-captured objects as explicit formals.
-  # This signature must stay in sync with the 14-item closure list spec.
+  # This signature must stay in sync with the 16-item closure list spec.
   loop_body <- function(i, hat, obs, base, sel_mat, col_map,
                         class_base, approach, active_ncol,
-                        params, fit, checkpoint_dir, kset, dots) {
+                        params, fit, checkpoint_dir, kset, dots, h, n) {
     gc_every <- 5L
 
     global_id <- if (length(sel_mat) == 1) {
@@ -137,10 +139,24 @@ rml <- function(
       if (is.null(kset)) {
         X <- hat[, id, drop = FALSE]
       } else {
-        # Per-iter FoReco2matrix call: O(n_series) regression for ctrml.
-        # Future opt: pre-compute parts once in rml(), pass to closure (smaller than expanded form).
-        # See spd.14 (TBD ticket).
-        X <- FoRecoML:::input2rtw_partial(hat, kset, cols = global_id)
+        # Per-iter expansion: 3-way dispatch on (kset, h).
+        # kset only (non-mfh, spd.12): input2rtw_partial.
+        # kset + h + n (mfh, spd.13): mat2hmat_partial.
+        # For mfh: h_hat_eff and h_base_eff are derived from NCOL(hat/base)
+        # and kt (= sum(max(kset)/kset)), not from the nominal h parameter,
+        # because training and prediction horizons can differ.
+        # Future opt: pre-compute parts once in rml() (spd.14 TBD).
+        if (!is.null(h)) {
+          kt_eff     <- sum(max(kset) / kset)
+          h_hat_eff  <- NCOL(hat) / kt_eff
+          h_base_eff <- if (!is.null(base)) NCOL(base) / kt_eff else NULL
+        }
+        X <- if (is.null(h)) {
+          FoRecoML:::input2rtw_partial(hat, kset, cols = global_id)
+        } else {
+          FoRecoML:::mat2hmat_partial(hat, h_hat_eff, kset, n, cols = global_id)
+        }
+        # NA filter — applies uniformly to BOTH spd.12 and spd.13 expansion outputs.
         na_cols <- FoRecoML:::na_col_mask(X)
         if (any(na_cols)) {
           X <- X[, !na_cols, drop = FALSE]
@@ -185,8 +201,14 @@ rml <- function(
     if (!is.null(base)) {
       if (is.null(kset)) {
         Xtest <- base[, id, drop = FALSE]
-      } else {
+      } else if (is.null(h)) {
         Xtest <- FoRecoML:::input2rtw_partial(base, kset, cols = global_id_post_na)
+      } else {
+        # mfh Xtest: always derive h_base from base dimensions.
+        # kt = sum(max(kset)/kset); predict horizon can differ from training horizon.
+        h_base_kt <- sum(max(kset) / kset)
+        h_base_eff_xtest <- NCOL(base) / h_base_kt
+        Xtest <- FoRecoML:::mat2hmat_partial(base, h_base_eff_xtest, kset, n, cols = global_id_post_na)
       }
     } else {
       Xtest <- NULL
@@ -225,7 +247,8 @@ rml <- function(
         i, hat = hat, obs = obs, base = base, sel_mat = sel_mat,
         col_map = col_map, class_base = class_base, approach = approach,
         active_ncol = active_ncol, params = params, fit = fit,
-        checkpoint_dir = checkpoint_dir, kset = kset, dots = dots
+        checkpoint_dir = checkpoint_dir, kset = kset, dots = dots,
+        h = h, n = n
       )
     }
     result
@@ -244,7 +267,8 @@ rml <- function(
         hat = hat, obs = obs, base = base, sel_mat = sel_mat,
         col_map = col_map, class_base = class_base, approach = approach,
         active_ncol = active_ncol, params = params, fit = fit,
-        checkpoint_dir = checkpoint_dir, kset = kset, dots = dots
+        checkpoint_dir = checkpoint_dir, kset = kset, dots = dots,
+        h = h, n = n
       )
     )[]
   }

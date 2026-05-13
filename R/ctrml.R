@@ -310,16 +310,16 @@ ctrml <- function(
       cli_abort("Incorrect {.arg hat} rows dimension.", call = NULL)
     }
 
-    # T5: build sel_mat BEFORE materializing hat so we can slice-first.
+    # T5: build sel_mat BEFORE expansion so we can slice-first.
     # For the non-mfh path, the full row-replicated training matrix has
-    # `tmp$dim[["n"]] * tmp$dim[["p"]]` columns. For mfh, sel_mat is keyed on
-    # the full mat2hmat output; we materialize first, then derive total_cols.
+    # `tmp$dim[["n"]] * tmp$dim[["p"]]` columns. For mfh, total_cols is the
+    # full mat2hmat output column count n*kt; hat stays raw (n x h*kt) and
+    # mat2hmat expansion is deferred to loop_body via mat2hmat_partial (spd.13).
     if (!grepl("mfh", features)) {
       total_cols <- tmp$dim[["n"]] * tmp$dim[["p"]]
     } else {
       h <- NCOL(hat) / tmp$dim[["kt"]]
-      hat <- mat2hmat(hat, h = h, kset = tmp$set, n = tmp$dim[["n"]])
-      total_cols <- NCOL(hat)
+      total_cols <- tmp$dim[["n"]] * tmp$dim[["kt"]]
     }
     features_size <- total_cols
 
@@ -386,31 +386,12 @@ ctrml <- function(
     )
     attr(sel_mat, "sel_method") <- features
 
-    # T5: compute keep_cols for features_size; hat row-expansion deferred to loop_body.
-    if (!grepl("mfh", features)) {
-      keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
-    } else {
-      keep_cols <- NULL
-    }
-
-    # Remove NA variables from sel_mat. For non-mfh (spd.12), NA detection is
-    # deferred to loop_body per-series via kset. For mfh, NA detection runs on
-    # the fully-materialized hat.
-    if (is.null(keep_cols)) {
-      # mfh path: hat is the full materialization; sel_mat is sized to it.
-      na_local <- na_col_mask(hat)
-      if (any(na_local)) {
-        if (NCOL(sel_mat) == 1) {
-          if (length(sel_mat) == 1) {
-            sel_mat <- rep(sel_mat, NCOL(hat))
-          }
-          sel_mat[na_local] <- 0
-          sel_mat <- as(sel_mat, "sparseVector")
-        } else {
-          sel_mat[na_local, ] <- 0
-        }
-      }
-    }
+    # T5/spd.13: compute keep_cols for features_size. For non-mfh (spd.12),
+    # hat row-expansion deferred to loop_body via input2rtw_partial. For mfh
+    # (spd.13), hat expansion deferred to loop_body via mat2hmat_partial.
+    # NA detection is deferred to loop_body per-series for BOTH paths; the
+    # wrapper-side mfh NA block is removed (B3 fix).
+    keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
   } else {
     if (!inherits(fit, "rml_fit")) {
       cli_abort("Incorrect {.arg fit} object.", call = NULL)
@@ -434,13 +415,10 @@ ctrml <- function(
     features <- attr(fit$sel_mat, "sel_method")
     features_size <- fit$features_size
     block_sampling <- fit$block_sampling
-    # T5: in fit-reuse, derive keep_cols from stored (full) sel_mat for the
-    # non-mfh path so we can slice-materialize base. mfh path stays full.
-    if (!grepl("mfh", features)) {
-      keep_cols <- sel_mat_keep_cols(sel_mat, features_size)
-    } else {
-      keep_cols <- NULL
-    }
+    # T5/spd.13: derive keep_cols from stored sel_mat for BOTH non-mfh and mfh.
+    # Non-mfh: base expansion deferred to loop_body via input2rtw_partial.
+    # mfh: base expansion deferred to loop_body via mat2hmat_partial (spd.13).
+    keep_cols <- sel_mat_keep_cols(sel_mat, features_size)
   }
 
   if (missing(base)) {
@@ -454,37 +432,21 @@ ctrml <- function(
     cli_abort("Incorrect {.arg base} rows dimension.", call = NULL)
   } else {
     h <- NCOL(base) / tmp$dim[["kt"]]
-    if (grepl("mfh", features)) {
-      # Calculate 'h' and 'base_hmat'
-      base <- mat2hmat(base, h = h, kset = tmp$set, n = tmp$dim[["n"]])
-    }
-    # non-mfh: base row-expansion deferred to loop_body via kset
+    # Both mfh and non-mfh: base row-expansion deferred to loop_body via
+    # mat2hmat_partial (mfh, spd.13) or input2rtw_partial (non-mfh, spd.12).
   }
 
-  # Validate base column count for mfh path (post-materialization check).
-  # Non-mfh: raw base dimensions already validated by NCOL(base) %% kt check above.
-  if (is.null(keep_cols)) {
-    expected_base_ncol <- features_size
-    if (NCOL(base) != expected_base_ncol) {
-      cli_abort(
-        paste0(
-          "The number of columns of {.arg base} ",
-          "must be equal to the number of ",
-          "features used during fitting."
-        ),
-        call = NULL
-      )
-    }
-  } else if (!is.null(fit) && !grepl("mfh", features)) {
-    # Horizon mismatch guard: compare predict-time h against training h_train.
-    # h_train is stored at fit time; NULL guard preserves back-compat for old fits.
-    if (!is.null(fit$h_train) && h != fit$h_train) {
-      cli::cli_abort(c(
-        "`base` horizon mismatch with training fit.",
-        "i" = "Training fit was built with h = {fit$h_train}.",
-        "x" = "Got base with implied h = {h} (= NCOL(base) / kt)."
-      ), call = NULL)
-    }
+  # Horizon mismatch guard for non-mfh path (spd.12): compare predict-time h
+  # against training h_train. For mfh, h derived from hat is the training
+  # observation count (not the forecast horizon), so the guard is not applicable.
+  # h_train is NULL for mfh (set in ctrml_fit) and for old fits (back-compat).
+  if (!is.null(fit) && !grepl("mfh", features) &&
+      !is.null(fit$h_train) && h != fit$h_train) {
+    cli::cli_abort(c(
+      "`base` horizon mismatch with training fit.",
+      "i" = "Training fit was built with h = {fit$h_train}.",
+      "x" = "Got base with implied h = {h} (= NCOL(base) / kt)."
+    ), call = NULL)
   }
 
   reco_mat <- rml(
@@ -500,7 +462,9 @@ ctrml <- function(
     keep_cols = keep_cols,
     checkpoint = checkpoint,
     n_workers = n_workers,
-    kset = tmp$set
+    kset = tmp$set,
+    h = if (grepl("mfh", features)) h else NULL,
+    n = if (grepl("mfh", features)) tmp$dim[["n"]] else NULL
   )
 
   obj <- attr(reco_mat, "fit")
@@ -520,18 +484,42 @@ ctrml <- function(
     h_train = h
   )
   attr(reco_mat, "fit") <- NULL
-  if (!grepl("mfh", features)) {
+  if (grepl("mfh", features)) {
+    # mfh: rml returns h_base × (m*nb); ctbu expects nb × (h*m).
+    # obs_mfh column ordering: cols 1..m*nb, series-major then level-minor.
+    # Column (s-1)*m + lv = (series s, temporal level lv) 1-indexed.
+    # ctbu expects: nb rows (series), h_base*m cols ordered (h per level, m levels).
+    # ctbu_base[s, (lv-1)*h_base + 1:h_base] = reco_mat[, (s-1)*m + lv].
+    nb <- tmp$dim[["nb"]]
+    m  <- tmp$dim[["m"]]
+    h_base_local <- NROW(reco_mat)
+    ctbu_base <- matrix(NA_real_, nrow = nb, ncol = h_base_local * m)
+    for (s in seq_len(nb)) {
+      for (lv in seq_len(m)) {
+        obs_col  <- (s - 1L) * m + lv
+        ctbu_cols <- (lv - 1L) * h_base_local + seq_len(h_base_local)
+        ctbu_base[s, ctbu_cols] <- reco_mat[, obs_col]
+      }
+    }
+    reco_mat <- ctbu(
+      ctbu_base,
+      agg_order = agg_order,
+      agg_mat = agg_mat,
+      sntz = sntz,
+      round = round,
+      tew = tew
+    )
+  } else {
     reco_mat <- matrix(as.vector(reco_mat), ncol = tmp$dim[["nb"]])
+    reco_mat <- ctbu(
+      t(reco_mat),
+      agg_order = agg_order,
+      agg_mat = agg_mat,
+      sntz = sntz,
+      round = round,
+      tew = tew
+    )
   }
-
-  reco_mat <- ctbu(
-    t(reco_mat),
-    agg_order = agg_order,
-    agg_mat = agg_mat,
-    sntz = sntz,
-    round = round,
-    tew = tew
-  )
 
   attr(reco_mat, "FoReco") <- new_foreco_info(list(
     fit = obj,
@@ -614,13 +602,14 @@ ctrml_fit <- function(
     cli_abort("Incorrect {.arg hat} rows dimension.", call = NULL)
   }
 
-  # T5: build sel_mat BEFORE materializing hat (non-mfh slice-first).
+  # T5/spd.13: build sel_mat BEFORE expansion (non-mfh and mfh slice-first).
+  # For mfh, total_cols = n*kt is the full mat2hmat output column count;
+  # hat stays raw (n x h*kt) and expansion is deferred to loop_body (spd.13).
   if (!grepl("mfh", features)) {
     total_cols <- tmp$dim[["n"]] * tmp$dim[["p"]]
   } else {
     h <- NCOL(hat) / tmp$dim[["kt"]]
-    hat <- mat2hmat(hat, h = h, kset = tmp$set, n = tmp$dim[["n"]])
-    total_cols <- NCOL(hat)
+    total_cols <- tmp$dim[["n"]] * tmp$dim[["kt"]]
   }
 
   switch(
@@ -686,31 +675,11 @@ ctrml_fit <- function(
   )
   attr(sel_mat, "sel_method") <- features
 
-  # T5: compute keep_cols for features_size; hat row-expansion deferred to loop_body.
-  if (!grepl("mfh", features)) {
-    keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
-  } else {
-    keep_cols <- NULL
-  }
-
-  # Remove NA variables from sel_mat. For non-mfh (spd.12), NA detection is
-  # deferred to loop_body per-series via kset. For mfh, NA detection runs on
-  # the fully-materialized hat.
-  if (is.null(keep_cols)) {
-    # mfh path: hat is the full materialization; sel_mat is sized to it.
-    na_local <- na_col_mask(hat)
-    if (any(na_local)) {
-      if (NCOL(sel_mat) == 1) {
-        if (length(sel_mat) == 1) {
-          sel_mat <- rep(sel_mat, NCOL(hat))
-        }
-        sel_mat[na_local] <- 0
-        sel_mat <- as(sel_mat, "sparseVector")
-      } else {
-        sel_mat[na_local, ] <- 0
-      }
-    }
-  }
+  # T5/spd.13: compute keep_cols for features_size. For non-mfh (spd.12),
+  # hat row-expansion deferred to loop_body via input2rtw_partial. For mfh
+  # (spd.13), hat expansion deferred to loop_body via mat2hmat_partial.
+  # NA detection is deferred to loop_body per-series for BOTH paths (B3 fix).
+  keep_cols <- sel_mat_keep_cols(sel_mat, total_cols)
 
   obj <- rml(
     base = NULL,
@@ -725,13 +694,16 @@ ctrml_fit <- function(
     keep_cols = keep_cols,
     checkpoint = checkpoint,
     n_workers = n_workers,
-    kset = tmp$set
+    kset = tmp$set,
+    h = if (grepl("mfh", features)) h else NULL,
+    n = if (grepl("mfh", features)) tmp$dim[["n"]] else NULL
   )
 
   # h_train is the forecast horizon used at fit time.
-  # For mfh path h is already computed from hat.
   # For non-mfh path, ctrml_fit has no base → no forecast horizon → leave NULL.
-  h_train <- if (grepl("mfh", features)) h else NULL
+  # For mfh path, h derived from hat is the TRAINING observation count (N), not
+  # the forecast horizon → also NULL (no h_train mismatch guard for mfh).
+  h_train <- NULL
 
   obj <- new_rml_fit(
     fit = obj$fit,

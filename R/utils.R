@@ -316,6 +316,28 @@ input2rtw <- function(x, kset) {
   do.call(cbind, rev(x))
 }
 
+# Slice-first variant of mat2hmat: materializes ONLY the output columns whose
+# global index (in the full h × (n*kt) output) is in `cols`. Output column
+# order matches `cols`. Full-cols invocation is byte-identical to mat2hmat().
+# `cols` must be unique strictly-increasing integers in [1, n*kt].
+#
+# Correctness: identical(mat2hmat_partial(m, h, k, n, cols),
+#                         mat2hmat(m, h, k, n)[, cols, drop = FALSE])
+# for all (m, h, kset, n, cols).
+mat2hmat_partial <- function(mat, h, kset, n, cols) {
+  if (length(cols) == 0L) return(matrix(numeric(0), nrow = h, ncol = 0))
+  m   <- max(kset)
+  i   <- rep(rep(rep(seq_len(h), length(kset)), rep(m / kset, each = h)), n)
+  vec <- as.vector(t(mat))
+  ord <- order(i)
+  ncol_total <- length(vec) %/% h
+  if (any(cols < 1L | cols > ncol_total)) {
+    cli::cli_abort("`cols` out of range [1, {ncol_total}].")
+  }
+  idx <- as.vector(outer((seq_len(h) - 1L) * ncol_total, cols, "+"))
+  matrix(vec[ord[idx]], nrow = h, ncol = length(cols))
+}
+
 # Slice-first variant of input2rtw: materializes ONLY the columns whose global
 # index (in the full row-replicated output) is in `cols`. Output column order
 # matches `cols`. Full-cols invocation is byte-identical to input2rtw().
