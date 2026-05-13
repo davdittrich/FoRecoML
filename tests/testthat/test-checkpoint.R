@@ -194,6 +194,36 @@ if (require(testthat)) {
     expect_equal(as.numeric(r1), as.numeric(r2), tolerance = 1e-12)
   })
 
+  test_that("resolve_checkpoint auto: n_workers multiplier crosses threshold", {
+    skip_if_not_installed("testthat")
+    # Mock available_ram_bytes to a fixed 1 GB so test is deterministic regardless of host RAM.
+    local_mocked_bindings(
+      available_ram_bytes = function() 1e9,
+      .package = "FoRecoML"
+    )
+    # Pick hat: 1000 x 625 = 5 MB.
+    # est_single = 5e6 * (5 * 10 + 3) = 5e6 * 53 = 265 MB (< 0.5 GB threshold -> no fire)
+    # est_4     = 265 MB * 4 = 1060 MB (> 0.5 GB -> fires)
+    hat <- matrix(rnorm(1000 * 625), nrow = 1000)
+    est_single <- as.numeric(NROW(hat)) * NCOL(hat) * 8 * 5 * 10 +
+                  as.numeric(NROW(hat)) * NCOL(hat) * 8 * 3
+    stopifnot(est_single < 0.5e9 && est_single * 4 > 0.5e9)
+
+    r1 <- FoRecoML:::resolve_checkpoint("auto", hat, "randomForest", p = 10L, n_workers = 1L)
+    expect_null(r1)
+
+    r4 <- FoRecoML:::resolve_checkpoint("auto", hat, "randomForest", p = 10L, n_workers = 4L)
+    expect_true(is.character(r4))
+    expect_true(dir.exists(r4))
+    unlink(r4, recursive = TRUE)
+  })
+
+  test_that("resolve_checkpoint default n_workers = 1L preserves backward compat", {
+    expect_no_error(FoRecoML:::resolve_checkpoint("auto", matrix(1:4, 2, 2), "lightgbm", p = 1L))
+    expect_no_error(FoRecoML:::resolve_checkpoint(FALSE, NULL, "lightgbm", p = 1L))
+    expect_no_error(FoRecoML:::resolve_checkpoint(TRUE, NULL, "lightgbm", p = 1L))
+  })
+
   test_that("predict-reuse numerical equivalence with checkpointed fit (mw3.3)", {
     # mw3.3: reco_mat returned by predict-reuse must be numerically identical
     # to the in-memory baseline regardless of whether the per-iteration fit is
