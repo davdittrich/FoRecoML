@@ -102,6 +102,8 @@ rml <- function(
   loop_body <- function(i, hat, obs, base, sel_mat, col_map,
                         class_base, approach, active_ncol,
                         params, fit, checkpoint_dir, dots) {
+    gc_every <- 5L
+
     global_id <- if (length(sel_mat) == 1) {
       seq_len(active_ncol)
     } else if (is(sel_mat, "sparseVector") || NCOL(sel_mat) == 1) {
@@ -157,6 +159,11 @@ rml <- function(
       tmp$fit <- path_i
     }
 
+    # T6 — gc() every gc_every iterations under checkpoint mode.
+    if (!is.null(checkpoint_dir) && i %% gc_every == 0L) {
+      gc(verbose = FALSE)
+    }
+
     # mw3.3 invariant: on predict-reuse, store only bts.
     if (is.null(fit)) list(bts = tmp$bts, fit = tmp$fit) else list(bts = tmp$bts)
   }
@@ -172,7 +179,6 @@ rml <- function(
         active_ncol = active_ncol, params = params, fit = fit,
         checkpoint_dir = checkpoint_dir, dots = dots
       )
-      if (!is.null(checkpoint_dir)) gc(verbose = FALSE)
     }
     result
   } else {
