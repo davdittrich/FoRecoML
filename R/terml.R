@@ -163,7 +163,8 @@ terml <- function(
   sntz = FALSE,
   round = FALSE,
   fit = NULL,
-  checkpoint = "auto"
+  checkpoint = "auto",
+  n_workers = "auto"
 ) {
   if (is.null(fit)) {
     if (missing(agg_order)) {
@@ -355,7 +356,8 @@ terml <- function(
     tuning = tuning,
     block_sampling = block_sampling,
     keep_cols = keep_cols,
-    checkpoint = checkpoint
+    checkpoint = checkpoint,
+    n_workers = n_workers
   )
 
   obj <- attr(reco_mat, "fit")
@@ -415,7 +417,8 @@ terml_fit <- function(
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
-  checkpoint = "auto"
+  checkpoint = "auto",
+  n_workers = "auto"
 ) {
   # Check if 'agg_order' is provided
   if (missing(agg_order)) {
@@ -541,7 +544,8 @@ terml_fit <- function(
     tuning = tuning,
     block_sampling = block_sampling,
     keep_cols = keep_cols,
-    checkpoint = checkpoint
+    checkpoint = checkpoint,
+    n_workers = n_workers
   )
 
   obj <- new_rml_fit(

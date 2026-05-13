@@ -37,8 +37,8 @@ Description: Nonlinear forecast reconciliation with machine learning in
     temporal, and cross-temporal 
     (Rombouts et al. 2024 <doi:10.1016/j.ijforecast.2024.05.008>) frameworks.
 Depends: R (>= 3.4), Matrix, FoReco
-Imports: stats, cli, methods, randomForest, lightgbm, xgboost,
-    mlr3, mlr3tuning, mlr3learners, paradox, qs2
+Imports: stats, cli, methods, mirai, randomForest, lightgbm,
+    xgboost, mlr3, mlr3tuning, mlr3learners, paradox, qs2
 License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
