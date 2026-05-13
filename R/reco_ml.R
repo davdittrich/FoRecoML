@@ -179,9 +179,9 @@ rml <- function(
     if (prev == 0L) {
       mirai_seed <- sample.int(.Machine$integer.max, 1L)
       mirai::daemons(n_workers_resolved, seed = mirai_seed)
-      mirai::everywhere({ library(FoRecoML) })
       on.exit(mirai::daemons(0), add = TRUE)
     }
+    mirai::everywhere({ library(FoRecoML) })
     mirai::mirai_map(
       seq_len(p), loop_body,
       .args = list(
