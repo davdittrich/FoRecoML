@@ -70,6 +70,19 @@
 #'   [mlr3tuning] framework (e.g., terminators, search spaces). The argument
 #'   format follows [mlr3tuning::auto_tuner], except that the learner is set
 #'   through `params`.
+#' @param n_workers Number of parallel workers for the per-series fit loop.
+#'   Default `"auto"` sets workers =
+#'   `max(1, floor(detectCores() / inner_threads) - 1)`, where
+#'   `inner_threads` is inferred from `params$num_threads` / `params$nthread`
+#'   / `params$num.threads`, else 1. Set `n_workers = 1` for sequential. When
+#'   parallel, the package spawns a `mirai` daemon pool (NNG sockets, spawn
+#'   not fork — avoids OpenMP/fork issues with xgboost/lightgbm/ranger). Pool
+#'   torn down via `on.exit`. Inner thread params auto-capped at 1 when
+#'   parallel; override by setting in `params`. Stochastic learners
+#'   (randomForest, mlr3+ranger) under parallel produce different outputs
+#'   than sequential (different RNG state) but reproducible across parallel
+#'   runs with same `set.seed()` before call. Deterministic learners
+#'   (xgboost nthread=1, lightgbm num_threads=1) match sequential to ≤1e-12.
 #' @param checkpoint Controls disk-backed checkpointing of fitted per-series
 #'   models. With \eqn{p} bottom-level models trained simultaneously, the
 #'   default behaviour can exceed available RAM for large hierarchies. Tri-mode
@@ -250,7 +263,8 @@ ctrml <- function(
   sntz = FALSE,
   round = FALSE,
   fit = NULL,
-  checkpoint = "auto"
+  checkpoint = "auto",
+  n_workers = "auto"
 ) {
   if (is.null(fit)) {
     # Check if 'agg_order' is provided
@@ -489,7 +503,8 @@ ctrml <- function(
     tuning = tuning,
     block_sampling = block_sampling,
     keep_cols = keep_cols,
-    checkpoint = checkpoint
+    checkpoint = checkpoint,
+    n_workers = n_workers
   )
 
   obj <- attr(reco_mat, "fit")
@@ -555,7 +570,8 @@ ctrml_fit <- function(
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
-  checkpoint = "auto"
+  checkpoint = "auto",
+  n_workers = "auto"
 ) {
   # Check if 'agg_order' is provided
   if (missing(agg_order)) {
@@ -720,7 +736,8 @@ ctrml_fit <- function(
     tuning = tuning,
     block_sampling = block_sampling,
     keep_cols = keep_cols,
-    checkpoint = checkpoint
+    checkpoint = checkpoint,
+    n_workers = n_workers
   )
 
   obj <- new_rml_fit(

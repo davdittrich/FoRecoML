@@ -9,6 +9,7 @@ rml <- function(
   seed = NULL,
   keep_cols = NULL,
   checkpoint = "auto",
+  n_workers = "auto",
   ...
 ) {
   class_base <- approach
@@ -43,6 +44,15 @@ rml <- function(
     # sel_mat <- fit$sel_mat
     p <- length(fit$fit)
   }
+
+  # Resolve parallelism: cap inner threads when outer workers > 1.
+  n_workers_resolved <- resolve_n_workers(n_workers, class_base, params)
+  if (n_workers_resolved > 1L) {
+    params <- cap_inner_threads(params, n_workers_resolved, approach = class_base)
+  }
+
+  # Capture dots BEFORE the loop so they can be forwarded via .args.
+  dots <- list(...)
 
   # T6 — Resolve tri-mode `checkpoint` into NULL (disabled) or a directory.
   # Only meaningful during training (fit=NULL). On fit reuse, the stored fit
@@ -87,13 +97,11 @@ rml <- function(
     col_map[keep_cols] <- seq_along(keep_cols)
   }
 
-  # T6 — for-loop replaces lapply so we can serialize each `tmp$fit` to disk
-  # immediately (when checkpoint_dir != NULL) and replace it with a path
-  # string, then drop the in-memory copy and explicit-gc before the next i.
-  # Net effect: peak RSS = 1 live model + (p-1) path strings, instead of p
-  # live models. Predict (fit reuse) uses get_fit_i() for lazy reload.
-  out <- vector("list", p)
-  for (i in seq_len(p)) {
+  # Per-series loop body with all closure-captured objects as explicit formals.
+  # This signature must stay in sync with the 13-item closure list spec.
+  loop_body <- function(i, hat, obs, base, sel_mat, col_map,
+                        class_base, approach, active_ncol,
+                        params, fit, checkpoint_dir, dots) {
     global_id <- if (length(sel_mat) == 1) {
       seq_len(active_ncol)
     } else if (is(sel_mat, "sparseVector") || NCOL(sel_mat) == 1) {
@@ -111,7 +119,7 @@ rml <- function(
       X <- na.omit(X)
       if (length(attr(X, "na.action")) > 0) {
         if (NROW(X) == 0) {
-          cli_abort(
+          cli::cli_abort(
             paste0(
               "All the predictor variables for series {.val {i}} contain ",
               "{.code NA} values after applying {.fn na.omit}. ",
@@ -126,7 +134,7 @@ rml <- function(
     } else {
       y <- X <- NULL
       # T6 — lazy-load: fit$fit[[i]] may be a path (checkpointed) or model.
-      fit_i <- get_fit_i(fit, i)
+      fit_i <- FoRecoML:::get_fit_i(fit, i)
     }
 
     if (!is.null(base)) {
@@ -135,33 +143,54 @@ rml <- function(
       Xtest <- NULL
     }
 
-    tmp <- .rml(
-      approach = approach,
-      y = y,
-      X = X,
-      Xtest = Xtest,
-      fit = fit_i,
-      params = params,
-      ...
-    )
+    tmp <- do.call(FoRecoML:::.rml, c(
+      list(approach = approach, y = y, X = X, Xtest = Xtest,
+           fit = fit_i, params = params),
+      dots
+    ))
 
-    # T6 — Serialize freshly-trained fit to disk, replace with path. Skip
-    # when no training happened (fit reuse: tmp$fit IS the loaded model and
-    # we don't want to re-serialize it; the persistent path is already in
-    # fit$fit[[i]]).
+    # T6 — Serialize freshly-trained fit to disk, replace with path.
     if (!is.null(checkpoint_dir) && is.null(fit)) {
-      path_i <- serialize_fit(tmp$fit, checkpoint_dir, i, class_base)
+      path_i <- FoRecoML:::serialize_fit(tmp$fit, checkpoint_dir, i, class_base)
       tmp$fit <- path_i
     }
 
-    # mw3.3: on predict-reuse, store only bts so the deserialized model is
-    # released when `tmp` goes out of scope at end of this iteration, rather
-    # than being retained in out[[i]]$fit until the loop finishes.
-    out[[i]] <- if (is.null(fit)) tmp else list(bts = tmp$bts)
-    rm(X, y, Xtest, fit_i)
-    if (!is.null(checkpoint_dir)) {
-      gc(verbose = FALSE)
+    # mw3.3 invariant: on predict-reuse, store only bts.
+    if (is.null(fit)) list(bts = tmp$bts, fit = tmp$fit) else list(bts = tmp$bts)
+  }
+
+  # Dispatch: sequential (n_workers == 1) or parallel via mirai.
+  out <- if (n_workers_resolved == 1L) {
+    # T6 — sequential path: for-loop so we can gc() after each checkpoint.
+    result <- vector("list", p)
+    for (i in seq_len(p)) {
+      result[[i]] <- loop_body(
+        i, hat = hat, obs = obs, base = base, sel_mat = sel_mat,
+        col_map = col_map, class_base = class_base, approach = approach,
+        active_ncol = active_ncol, params = params, fit = fit,
+        checkpoint_dir = checkpoint_dir, dots = dots
+      )
+      if (!is.null(checkpoint_dir)) gc(verbose = FALSE)
     }
+    result
+  } else {
+    # Parallel path via mirai (spawn-based, avoids fork+OpenMP issues).
+    prev <- mirai::status()$connections
+    if (prev == 0L) {
+      mirai_seed <- sample.int(.Machine$integer.max, 1L)
+      mirai::daemons(n_workers_resolved, seed = mirai_seed)
+      mirai::everywhere({ library(FoRecoML) })
+      on.exit(mirai::daemons(0), add = TRUE)
+    }
+    mirai::mirai_map(
+      seq_len(p), loop_body,
+      .args = list(
+        hat = hat, obs = obs, base = base, sel_mat = sel_mat,
+        col_map = col_map, class_base = class_base, approach = approach,
+        active_ncol = active_ncol, params = params, fit = fit,
+        checkpoint_dir = checkpoint_dir, dots = dots
+      )
+    )[]
   }
 
   if (is.null(fit)) {

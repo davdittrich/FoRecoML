@@ -260,6 +260,47 @@ get_fit_i <- function(obj, i) {
   f
 }
 
+# Resolve n_workers argument into a positive integer.
+resolve_n_workers <- function(n_workers, approach, params) {
+  if (is.numeric(n_workers) && length(n_workers) == 1 && is.finite(n_workers)) {
+    return(max(1L, as.integer(n_workers)))
+  }
+  if (identical(n_workers, "auto")) {
+    inner <- 1L
+    if (!is.null(params)) {
+      if (!is.null(params$num_threads)) {
+        inner <- max(1L, as.integer(params$num_threads))
+      } else if (!is.null(params$nthread)) {
+        inner <- max(1L, as.integer(params$nthread))
+      } else if (!is.null(params$num.threads)) {
+        inner <- max(1L, as.integer(params$num.threads))
+      }
+    }
+    cores <- parallel::detectCores(logical = TRUE)
+    if (!is.finite(cores)) cores <- 1L
+    return(max(1L, as.integer(floor(cores / inner) - 1L)))
+  }
+  cli_abort("`n_workers` must be a positive integer or 'auto'.")
+}
+
+# Auto-cap inner threads when outer parallel is active. Respects user settings
+# via is.null checks — only sets defaults, never overrides explicit user values.
+# `approach` is used to avoid injecting invalid params into mlr3 learner configs.
+cap_inner_threads <- function(params, n_workers, approach = NULL) {
+  if (n_workers <= 1L) return(params)
+  if (is.null(params)) params <- list()
+  if (identical(approach, "mlr3")) {
+    # mlr3 passes all params as learner hyperparameters; only num.threads is
+    # valid for ranger. Do not inject nthread / num_threads here.
+    if (is.null(params$num.threads)) params$num.threads <- 1L
+  } else {
+    if (is.null(params$nthread))     params$nthread     <- 1L
+    if (is.null(params$num_threads)) params$num_threads <- 1L
+    if (is.null(params$num.threads)) params$num.threads <- 1L
+  }
+  params
+}
+
 # Rombouts et al. (2025) matrix-form
 input2rtw <- function(x, kset) {
   x <- FoReco::FoReco2matrix(x, kset)

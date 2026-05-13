@@ -166,7 +166,8 @@ csrml <- function(
   sntz = FALSE,
   round = FALSE,
   fit = NULL,
-  checkpoint = "auto"
+  checkpoint = "auto",
+  n_workers = "auto"
 ) {
   if (is.null(fit)) {
     if (missing(agg_mat)) {
@@ -268,7 +269,8 @@ csrml <- function(
     params = params,
     fit = fit,
     tuning = tuning,
-    checkpoint = checkpoint
+    checkpoint = checkpoint,
+    n_workers = n_workers
   )
 
   obj <- attr(reco_mat, "fit")
@@ -317,7 +319,8 @@ csrml_fit <- function(
   approach = "randomForest",
   params = NULL,
   tuning = NULL,
-  checkpoint = "auto"
+  checkpoint = "auto",
+  n_workers = "auto"
 ) {
   if (missing(agg_mat)) {
     cli_abort(
@@ -387,7 +390,8 @@ csrml_fit <- function(
     approach = approach,
     params = params,
     tuning = tuning,
-    checkpoint = checkpoint
+    checkpoint = checkpoint,
+    n_workers = n_workers
   )
 
   obj <- new_rml_fit(

@@ -115,6 +115,20 @@ Serialization uses \pkg{qs2} for in-memory R objects (\code{randomForest},
 for \pkg{lightgbm} (its C++ external pointer cannot be serialized by
 \pkg{qs2}). Predictions from a checkpointed fit are identical
 (\eqn{\le 10^{-12}}) to the in-memory fit.}
+
+\item{n_workers}{Number of parallel workers for the per-series fit loop.
+Default \code{"auto"} sets workers =
+\code{max(1, floor(detectCores() / inner_threads) - 1)}, where
+\code{inner_threads} is inferred from \code{params$num_threads} / \code{params$nthread}
+/ \code{params$num.threads}, else 1. Set \code{n_workers = 1} for sequential. When
+parallel, the package spawns a \code{mirai} daemon pool (NNG sockets, spawn
+not fork — avoids OpenMP/fork issues with xgboost/lightgbm/ranger). Pool
+torn down via \code{on.exit}. Inner thread params auto-capped at 1 when
+parallel; override by setting in \code{params}. Stochastic learners
+(randomForest, mlr3+ranger) under parallel produce different outputs
+than sequential (different RNG state) but reproducible across parallel
+runs with same \code{set.seed()} before call. Deterministic learners
+(xgboost nthread=1, lightgbm num_threads=1) match sequential to ≤1e-12.}
 }
 \value{
 \itemize{
