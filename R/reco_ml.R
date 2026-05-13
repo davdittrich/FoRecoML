@@ -142,14 +142,13 @@ rml <- function(
         # Per-iter expansion: 3-way dispatch on (kset, h).
         # kset only (non-mfh, spd.12): input2rtw_partial.
         # kset + h + n (mfh, spd.13): mat2hmat_partial.
-        # For mfh: h_hat_eff and h_base_eff are derived from NCOL(hat/base)
-        # and kt (= sum(max(kset)/kset)), not from the nominal h parameter,
+        # For mfh: effective horizons are NCOL(hat or base) / kt
+        # (kt = sum(max(kset)/kset)), not the nominal h parameter,
         # because training and prediction horizons can differ.
         # Future opt: pre-compute parts once in rml() (spd.14 TBD).
         if (!is.null(h)) {
           kt_eff     <- sum(max(kset) / kset)
           h_hat_eff  <- NCOL(hat) / kt_eff
-          h_base_eff <- if (!is.null(base)) NCOL(base) / kt_eff else NULL
         }
         X <- if (is.null(h)) {
           FoRecoML:::input2rtw_partial(hat, kset, cols = global_id)
@@ -206,9 +205,7 @@ rml <- function(
       } else {
         # mfh Xtest: always derive h_base from base dimensions.
         # kt = sum(max(kset)/kset); predict horizon can differ from training horizon.
-        h_base_kt <- sum(max(kset) / kset)
-        h_base_eff_xtest <- NCOL(base) / h_base_kt
-        Xtest <- FoRecoML:::mat2hmat_partial(base, h_base_eff_xtest, kset, n, cols = global_id_post_na)
+        Xtest <- FoRecoML:::mat2hmat_partial(base, NCOL(base) / sum(max(kset) / kset), kset, n, cols = global_id_post_na)
       }
     } else {
       Xtest <- NULL

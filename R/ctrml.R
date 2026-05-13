@@ -481,7 +481,7 @@ ctrml <- function(
     block_sampling = block_sampling,
     checkpoint_dir = obj$checkpoint_dir,
     na_cols_list = obj$na_cols_list,
-    h_train = h
+    h_train = if (grepl("mfh", features)) NULL else h
   )
   attr(reco_mat, "fit") <- NULL
   if (grepl("mfh", features)) {

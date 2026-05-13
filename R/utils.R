@@ -319,7 +319,7 @@ input2rtw <- function(x, kset) {
 # Slice-first variant of mat2hmat: materializes ONLY the output columns whose
 # global index (in the full h × (n*kt) output) is in `cols`. Output column
 # order matches `cols`. Full-cols invocation is byte-identical to mat2hmat().
-# `cols` must be unique strictly-increasing integers in [1, n*kt].
+# `cols` must be unique integers in [1, n*kt].
 #
 # Correctness: identical(mat2hmat_partial(m, h, k, n, cols),
 #                         mat2hmat(m, h, k, n)[, cols, drop = FALSE])
@@ -341,7 +341,7 @@ mat2hmat_partial <- function(mat, h, kset, n, cols) {
 # Slice-first variant of input2rtw: materializes ONLY the columns whose global
 # index (in the full row-replicated output) is in `cols`. Output column order
 # matches `cols`. Full-cols invocation is byte-identical to input2rtw().
-# `cols` must be unique strictly-increasing integers (use `which()` output).
+# `cols` must be unique integers in [1, ncol_total] (use `which()` output).
 input2rtw_partial <- function(x, kset, cols) {
   if (length(cols) == 0L) {
     n_rows <- NROW(FoReco::FoReco2matrix(x, kset)[[1]]) * kset[1]
