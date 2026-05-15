@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "generated": "2026-05-15",
+  "project": {
+    "name": "FoRecoML",
+    "type": "r-package",
+    "description": "Nonlinear forecast reconciliation with machine learning (cross-sectional, temporal, cross-temporal)",
+    "version": "1.0.0.9000",
+    "license": "GPL (>= 3)"
+  },
+  "language": {
+    "primary": "R",
+    "min_version": "3.4",
+    "test_edition": 3
+  },
+  "tools": {
+    "test_runner": "testthat",
+    "coverage_threshold": 80,
+    "coverage_tool": "covr",
+    "docs": "pkgdown",
+    "ci": "github-actions",
+    "parallelism": "mirai",
+    "serialization": "qs2",
+    "style": "none"
+  },
+  "ml_backends": ["randomForest", "lightgbm", "xgboost", "mlr3", "ranger", "catboost"],
+  "work_mode": "performance-benchmarking",
+  "skills": {
+    "primary": ["r-benchmarking", "r-profiling", "remote-bench", "test-driven-development"],
+    "secondary": ["r-package-development", "testing-r-packages", "github-actions-r", "r-performance-engineering"]
+  },
+  "commands": {
+    "load": "devtools::load_all('.')",
+    "test": "devtools::test()",
+    "check": "R CMD INSTALL --preclean . && devtools::check()",
+    "coverage": "covr::package_coverage()",
+    "docs": "pkgdown::build_site()"
+  },
+  "remote_bench": {
+    "host": "192.168.1.43",
+    "bench_dir": "dev/"
+  }
+}
