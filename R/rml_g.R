@@ -744,18 +744,21 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #'   `NULL` disables.
 #' @param nrounds_per_batch integer; boosting rounds added per batch. Default 50.
 #' @param ... passed to [rml_g].
-#' @return `rml_g_fit` object with additional fields `agg_order`, `norm_params`,
-#'   and `framework = "te"`.
+#' @return Named numeric vector matching `FoReco::tebu()` output (length `h × kt`
+#'   where `kt = sum(max(agg_order)/agg_order)`; names like `"k-<order> h-<horizon>"`)
+#'   with `attr(., "FoReco")` of class `foreco_info`. Use [extract_reconciled_ml]
+#'   to access the underlying `rml_g_fit`.
 #' @examples
 #' \dontrun{
 #' agg_order <- c(4L, 2L, 1L)  # annual, semi-annual, quarterly
-#' n_levels <- sum(agg_order)
-#' N_hat <- 40; h <- 1
-#' hat <- matrix(rnorm(n_levels * N_hat), N_hat, n_levels)
-#' obs <- matrix(rnorm(N_hat), N_hat, 1L)  # one bottom-level series
-#' base <- matrix(rnorm(n_levels * h), h, n_levels)
-#' fit <- terml_g(base = base, hat = hat, obs = obs,
-#'                agg_order = agg_order, approach = "lightgbm", seed = 1L)
+#' m <- max(agg_order)
+#' kt <- sum(m / agg_order)
+#' T_obs <- 60L; h <- 2L
+#' hat <- matrix(rnorm(kt * T_obs), T_obs, kt)
+#' obs <- matrix(rnorm(T_obs), T_obs, 1L)  # one bottom-level series
+#' base <- matrix(rnorm(h * m * kt), h * m, kt)
+#' r <- terml_g(base = base, hat = hat, obs = obs,
+#'              agg_order = agg_order, approach = "lightgbm", seed = 1L)
 #' }
 #' @export
 terml_g <- function(base, hat, obs, agg_order,
@@ -771,15 +774,35 @@ terml_g <- function(base, hat, obs, agg_order,
                     nrounds_per_batch = 50L,
                     ...) {
   normalize <- match.arg(normalize)
+  if (missing(base)) {
+    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
+  }
+  base <- as.matrix(base)
+  if (!is.numeric(base)) {
+    cli_abort("{.arg base} must be numeric.", call = NULL)
+  }
+  if (ncol(obs) != 1L) {
+    cli_abort(
+      "{.arg obs} for terml_g must have exactly 1 column (single bottom-level temporal series).",
+      call = NULL)
+  }
+  if (ncol(base) != ncol(hat)) {
+    cli_abort(
+      "{.arg base} must have {ncol(hat)} columns (matching {.arg hat}); got {ncol(base)}.",
+      call = NULL)
+  }
+  m <- max(agg_order)
+  if (nrow(base) %% m != 0) {
+    cli_abort(
+      "{.arg base} must have rows divisible by max(agg_order) = {m}; got {nrow(base)}.",
+      call = NULL)
+  }
   hat_norm <- hat
   norm_params <- NULL
   if (normalize != "none") {
     nr <- normalize_stack(hat, method = normalize, scale_fn = scale_fn)
     hat_norm    <- nr$X_norm
     norm_params <- nr
-  }
-  if (missing(base)) {
-    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
   }
   fit_obj <- if (!is.null(batch_size)) {
     .run_chunked_rml_g(approach = approach, hat = hat_norm, obs = obs,
@@ -796,10 +819,19 @@ terml_g <- function(base, hat, obs, agg_order,
           early_stopping_rounds = early_stopping_rounds,
           validation_split = validation_split, ...)
   }
+  fit_obj$ncol_hat    <- ncol(hat)
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "te"
-  fit_obj
+  base_features <- apply_norm_params(base, fit_obj$norm_params)
+  bts_vec <- predict(fit_obj, newdata = base_features)
+  # tebu expects a vector of length h_hf = h * m (nb=1 invariant for terml_g)
+  reco_vec <- FoReco::tebu(bts_vec, agg_order = fit_obj$agg_order)
+  attr(reco_vec, "FoReco") <- new_foreco_info(list(
+    fit = fit_obj, framework = "Temporal",
+    forecast_horizon = nrow(base) / m,
+    rfun = "terml_g", ml = approach))
+  reco_vec
 }
 
 #' Cross-temporal reconciliation with a global ML model
