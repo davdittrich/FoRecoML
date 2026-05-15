@@ -690,32 +690,34 @@ csrml_g <- function(base, hat, obs, agg_mat,
   fit_obj$framework   <- "cs"
 
   # --- prediction + reconciliation pipeline -----------------------------------
-  # Step 1: transpose base to h×n feature space (same layout as hat rows)
-  base_t <- t(base)
-
-  # Step 2: apply stored normalization if used during training
+  # Step 1: apply stored normalization if used during training.
+  # base is already h×n (horizons × series), matching hat's column layout — no transpose needed.
   base_features <- if (!is.null(fit_obj$norm_params)) {
-    apply_norm_params(base_t, fit_obj$norm_params)
+    apply_norm_params(base, fit_obj$norm_params)
   } else {
-    base_t
+    base
   }
 
-  # Step 3: predict — series_id=NULL broadcasts over nb bottom series (series-major)
+  # Step 2: predict — series_id=NULL broadcasts over nb bottom series (series-major)
   # Output: numeric vector length h*nb = [s1_h1..hh, s2_h1..hh, ..., snb_h1..hh]
   bts_vec <- predict(fit_obj, newdata = base_features)
 
-  # Step 4: reshape to h × nb (column j = series j across all horizons)
+  # Step 3: reshape to h × nb (column j = series j across all horizons)
   nb <- length(fit_obj$series_id_levels)
-  bts_mat <- matrix(bts_vec, nrow = nrow(base_t), ncol = nb)
+  bts_mat <- matrix(bts_vec, nrow = nrow(base), ncol = nb)
 
-  # Step 5: csbu expects nb × h — transpose then reconcile
+  # Step 4: csbu expects nb × h — transpose then reconcile
   reco_mat <- FoReco::csbu(t(bts_mat), agg_mat = fit_obj$agg_mat)
 
-  # Step 6: attach fit for downstream extract_reconciled_ml()
-  attr(reco_mat, "FoReco") <- structure(
-    list(fit = fit_obj, framework = "Cross-sectional"),
-    class = "foreco_info"
-  )
+  # Step 5: attach fit for downstream extract_reconciled_ml()
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit        = fit_obj,
+    framework  = "Cross-sectional",
+    forecast_horizon = NROW(reco_mat),
+    cs_n       = ncol(base),
+    rfun       = "csrml_g",
+    ml         = approach
+  ))
   reco_mat
 }
 
