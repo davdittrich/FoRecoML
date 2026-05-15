@@ -627,8 +627,9 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 #' @param nrounds_per_batch integer; additional boosting rounds added per batch
 #'   when using incremental training. Default 50.
 #' @param ... passed to [rml_g].
-#' @return `rml_g_fit` object with additional fields `agg_mat`, `norm_params`,
-#'   and `framework = "cs"`.
+#' @return Numeric matrix (n × h) of cross-sectional reconciled forecasts, with
+#'   `attr(., "FoReco")` of class `foreco_info`. Use [extract_reconciled_ml]
+#'   to access the underlying `rml_g_fit`.
 #' @examples
 #' \dontrun{
 #' agg_mat <- t(c(1, 1))
@@ -660,15 +661,24 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     nrounds_per_batch = 50L,
                     ...) {
   normalize <- match.arg(normalize)
+  if (missing(base)) {
+    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
+  }
+  base <- as.matrix(base)
+  if (!is.numeric(base)) {
+    cli_abort("{.arg base} must be numeric.", call = NULL)
+  }
+  if (ncol(base) != ncol(hat)) {
+    cli_abort(
+      "{.arg base} must have {ncol(hat)} columns (matching {.arg hat}); got {ncol(base)}.",
+      call = NULL)
+  }
   hat_norm <- hat
   norm_params <- NULL
   if (normalize != "none") {
     nr <- normalize_stack(hat, method = normalize, scale_fn = scale_fn)
     hat_norm    <- nr$X_norm
     norm_params <- nr
-  }
-  if (missing(base)) {
-    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
   }
   fit_obj <- if (!is.null(batch_size)) {
     .run_chunked_rml_g(approach = approach, hat = hat_norm, obs = obs,
@@ -685,10 +695,20 @@ csrml_g <- function(base, hat, obs, agg_mat,
           early_stopping_rounds = early_stopping_rounds,
           validation_split = validation_split, ...)
   }
+  fit_obj$ncol_hat    <- ncol(hat)
   fit_obj$agg_mat     <- agg_mat
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "cs"
-  fit_obj
+  base_features <- apply_norm_params(base, fit_obj$norm_params)
+  bts_vec  <- predict(fit_obj, newdata = base_features)
+  h        <- nrow(base)
+  nb       <- length(fit_obj$series_id_levels)
+  bts_mat  <- matrix(bts_vec, nrow = h, ncol = nb)
+  reco_mat <- FoReco::csbu(bts_mat, agg_mat = fit_obj$agg_mat)
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit = fit_obj, framework = "Cross-sectional",
+    forecast_horizon = h, rfun = "csrml_g", ml = approach))
+  reco_mat
 }
 
 #' Temporal reconciliation with a global ML model
