@@ -788,6 +788,9 @@ terml_g <- function(base, hat, obs, agg_order,
     hat_norm    <- nr$X_norm
     norm_params <- nr
   }
+  if (missing(base)) {
+    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
+  }
   fit_obj <- if (!is.null(batch_size)) {
     .run_chunked_rml_g(approach = approach, hat = hat_norm, obs = obs,
                        params = params, seed = seed,
@@ -806,7 +809,32 @@ terml_g <- function(base, hat, obs, agg_order,
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "te"
-  fit_obj
+
+  # --- prediction + reconciliation pipeline -----------------------------------
+  # base is h×n (horizons × series features), matching hat's column layout — no transpose needed.
+  base_features <- if (!is.null(fit_obj$norm_params)) {
+    apply_norm_params(base, fit_obj$norm_params)
+  } else {
+    base
+  }
+  bts_vec <- predict(fit_obj, newdata = base_features)
+  nb      <- length(fit_obj$series_id_levels)
+  bts_mat <- matrix(bts_vec, nrow = nrow(base), ncol = nb)
+  # tebu expects a vector (hm×1) per series; apply per row of t(bts_mat) = nb × h
+  bts_t   <- t(bts_mat)  # nb × h
+  reco_list <- lapply(seq_len(nb), function(j) {
+    FoReco::tebu(bts_t[j, ], agg_order = fit_obj$agg_order)
+  })
+  reco_mat <- do.call(rbind, reco_list)
+  rownames(reco_mat) <- fit_obj$series_id_levels
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit              = fit_obj,
+    framework        = "Temporal",
+    forecast_horizon = ncol(reco_mat),
+    rfun             = "terml_g",
+    ml               = approach
+  ))
+  reco_mat
 }
 
 #' Cross-temporal reconciliation with a global ML model
