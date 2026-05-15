@@ -92,15 +92,27 @@ rml <- function(
   # string, then drop the in-memory copy and explicit-gc before the next i.
   # Net effect: peak RSS = 1 live model + (p-1) path strings, instead of p
   # live models. Predict (fit reuse) uses get_fit_i() for lazy reload.
+  # spd.15: hoist global_id computation before the loop (loop-invariant for
+  # scalar/vector sel_mat; per-column only for matrix sel_mat).
+  global_id_list <- if (length(sel_mat) == 1) {
+    rep(list(seq_len(active_ncol)), p)
+  } else if (is(sel_mat, "sparseVector") || NCOL(sel_mat) == 1) {
+    v <- which(as.numeric(if (is(sel_mat, "sparseVector")) sel_mat else sel_mat[, 1]) != 0)
+    rep(list(v), p)
+  } else {
+    lapply(seq_len(p), function(j) which(sel_mat[, j] != 0))
+  }
+
+  # cli progress: respect forecoml.progress option; default to interactive().
+  loop_seq <- if (isTRUE(getOption("forecoml.progress", interactive()))) {
+    cli::cli_progress_along(seq_len(p), name = "Training per-series models", clear = TRUE)
+  } else {
+    seq_len(p)
+  }
+
   out <- vector("list", p)
-  for (i in seq_len(p)) {
-    global_id <- if (length(sel_mat) == 1) {
-      seq_len(active_ncol)
-    } else if (is(sel_mat, "sparseVector") || NCOL(sel_mat) == 1) {
-      which(as.numeric(if (is(sel_mat, "sparseVector")) sel_mat else sel_mat[, 1]) != 0)
-    } else {
-      which(sel_mat[, i] != 0)
-    }
+  for (i in loop_seq) {
+    global_id <- global_id_list[[i]]
     id <- if (is.null(col_map)) global_id else { x <- col_map[global_id]; x[!is.na(x)] }
 
     if (is.null(fit)) {
@@ -108,20 +120,23 @@ rml <- function(
       X <- hat[, id, drop = FALSE]
       fit_i <- NULL
 
-      X <- na.omit(X)
-      if (length(attr(X, "na.action")) > 0) {
-        if (NROW(X) == 0) {
-          cli_abort(
-            paste0(
-              "All the predictor variables for series {.val {i}} contain ",
-              "{.code NA} values after applying {.fn na.omit}. ",
-              "Please check your {.arg hat} input or consider using ",
-              "another {.arg features} option."
-            ),
-            call = NULL
-          )
+      # spd.2: skip na.omit allocation when no NAs present.
+      if (anyNA(X)) {
+        X <- na.omit(X)
+        if (length(attr(X, "na.action")) > 0) {
+          if (NROW(X) == 0) {
+            cli_abort(
+              paste0(
+                "All the predictor variables for series {.val {i}} contain ",
+                "{.code NA} values after applying {.fn na.omit}. ",
+                "Please check your {.arg hat} input or consider using ",
+                "another {.arg features} option."
+              ),
+              call = NULL
+            )
+          }
+          y <- y[-attr(X, "na.action")]
         }
-        y <- y[-attr(X, "na.action")]
       }
     } else {
       y <- X <- NULL
@@ -159,7 +174,8 @@ rml <- function(
     # than being retained in out[[i]]$fit until the loop finishes.
     out[[i]] <- if (is.null(fit)) tmp else list(bts = tmp$bts)
     rm(X, y, Xtest, fit_i)
-    if (!is.null(checkpoint_dir)) {
+    # spd.3/8: throttle gc to every 10th iteration to reduce GC overhead.
+    if (!is.null(checkpoint_dir) && i %% 10L == 0L) {
       gc(verbose = FALSE)
     }
   }
