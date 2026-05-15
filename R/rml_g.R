@@ -613,6 +613,10 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 #'   [normalize_stack].
 #' @param params named list of backend hyperparameters.
 #' @param seed integer for reproducibility.
+#' @param sntz Logical. If `TRUE`, set negative reconciled values to zero
+#'   (non-negative reconciliation). Default `FALSE`.
+#' @param round Logical. If `TRUE`, round reconciled values to the number of
+#'   decimal places of the base forecasts. Passed to `FoReco::csbu`. Default `FALSE`.
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
@@ -653,6 +657,7 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     normalize = c("none", "zscore", "robust"),
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
+                    sntz = FALSE, round = FALSE,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
                     batch_size = NULL,
@@ -704,7 +709,7 @@ csrml_g <- function(base, hat, obs, agg_mat,
   h        <- nrow(base)
   nb       <- length(fit_obj$series_id_levels)
   bts_mat  <- matrix(bts_vec, nrow = h, ncol = nb)
-  reco_mat <- FoReco::csbu(bts_mat, agg_mat = fit_obj$agg_mat)
+  reco_mat <- FoReco::csbu(bts_mat, agg_mat = fit_obj$agg_mat, sntz = sntz, round = round)
   attr(reco_mat, "FoReco") <- new_foreco_info(list(
     fit = fit_obj, framework = "Cross-sectional",
     forecast_horizon = h, rfun = "csrml_g", ml = approach))
@@ -733,6 +738,12 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #'   [normalize_stack].
 #' @param params named list of backend hyperparameters.
 #' @param seed integer for reproducibility.
+#' @param sntz Logical. If `TRUE`, set negative reconciled values to zero
+#'   (non-negative reconciliation). Default `FALSE`.
+#' @param round Logical. If `TRUE`, round reconciled values to the number of
+#'   decimal places of the base forecasts. Passed to `FoReco::tebu`. Default `FALSE`.
+#' @param tew Character. Temporal aggregation weighting passed to `FoReco::tebu`.
+#'   Default `"sum"`.
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
@@ -766,6 +777,7 @@ terml_g <- function(base, hat, obs, agg_order,
                     normalize = c("none", "zscore", "robust"),
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
+                    sntz = FALSE, round = FALSE, tew = "sum",
                     early_stopping_rounds = 0L,
                     validation_split = 0,
                     batch_size = NULL,
@@ -826,7 +838,7 @@ terml_g <- function(base, hat, obs, agg_order,
   base_features <- apply_norm_params(base, fit_obj$norm_params)
   bts_vec <- predict(fit_obj, newdata = base_features)
   # tebu expects a vector of length h_hf = h * m (nb=1 invariant for terml_g)
-  reco_vec <- FoReco::tebu(bts_vec, agg_order = fit_obj$agg_order)
+  reco_vec <- FoReco::tebu(bts_vec, agg_order = fit_obj$agg_order, tew = tew, sntz = sntz, round = round)
   attr(reco_vec, "FoReco") <- new_foreco_info(list(
     fit = fit_obj, framework = "Temporal",
     forecast_horizon = nrow(base) / m,
@@ -856,6 +868,12 @@ terml_g <- function(base, hat, obs, agg_order,
 #'   [normalize_stack].
 #' @param params named list of backend hyperparameters.
 #' @param seed integer for reproducibility.
+#' @param sntz Logical. If `TRUE`, set negative reconciled values to zero
+#'   (non-negative reconciliation). Default `FALSE`.
+#' @param round Logical. If `TRUE`, round reconciled values to the number of
+#'   decimal places of the base forecasts. Passed to `FoReco::ctbu`. Default `FALSE`.
+#' @param tew Character. Temporal aggregation weighting passed to `FoReco::ctbu`.
+#'   Default `"sum"`.
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
@@ -893,6 +911,7 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     normalize = c("none", "zscore", "robust"),
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
+                    sntz = FALSE, round = FALSE, tew = "sum",
                     early_stopping_rounds = 0L,
                     validation_split = 0,
                     batch_size = NULL,
@@ -954,7 +973,8 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
   # ctbu expects nb × h_hf — transpose
   reco_mat <- FoReco::ctbu(t(bts_mat),
                            agg_mat = fit_obj$agg_mat,
-                           agg_order = fit_obj$agg_order)
+                           agg_order = fit_obj$agg_order,
+                           tew = tew, sntz = sntz, round = round)
   attr(reco_mat, "FoReco") <- new_foreco_info(list(
     fit = fit_obj, framework = "Cross-temporal",
     forecast_horizon = h_hf / m,
