@@ -867,8 +867,9 @@ terml_g <- function(base, hat, obs, agg_order,
 #'   `NULL` disables.
 #' @param nrounds_per_batch integer; boosting rounds added per batch. Default 50.
 #' @param ... passed to [rml_g].
-#' @return `rml_g_fit` object with additional fields `agg_mat`, `agg_order`,
-#'   `norm_params`, and `framework = "ct"`.
+#' @return Numeric matrix (`n × (h × kt)` where `kt = sum(max(agg_order)/agg_order)`)
+#'   of cross-temporal reconciled forecasts, with `attr(., "FoReco")` of class
+#'   `foreco_info`. Use [extract_reconciled_ml] to access the underlying `rml_g_fit`.
 #' @examples
 #' \dontrun{
 #' agg_mat <- t(c(1, 1))
@@ -882,9 +883,9 @@ terml_g <- function(base, hat, obs, agg_order,
 #' obs <- matrix(rnorm(p * N_hat), N_hat, p)
 #' colnames(obs) <- colnames(agg_mat)
 #' base <- matrix(rnorm(n_cs * n_te * h), h, n_cs * n_te)
-#' fit <- ctrml_g(base = base, hat = hat, obs = obs,
-#'                agg_mat = agg_mat, agg_order = agg_order,
-#'                approach = "lightgbm", seed = 1L)
+#' r <- ctrml_g(base = base, hat = hat, obs = obs,
+#'              agg_mat = agg_mat, agg_order = agg_order,
+#'              approach = "lightgbm", seed = 1L)
 #' }
 #' @export
 ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
@@ -900,15 +901,30 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     nrounds_per_batch = 50L,
                     ...) {
   normalize <- match.arg(normalize)
+  if (missing(base)) {
+    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
+  }
+  base <- as.matrix(base)
+  if (!is.numeric(base)) {
+    cli_abort("{.arg base} must be numeric.", call = NULL)
+  }
+  if (ncol(base) != ncol(hat)) {
+    cli_abort(
+      "{.arg base} must have {ncol(hat)} columns (matching {.arg hat}); got {ncol(base)}.",
+      call = NULL)
+  }
+  m <- max(agg_order)
+  if (nrow(base) %% m != 0) {
+    cli_abort(
+      "{.arg base} must have rows divisible by max(agg_order) = {m}; got {nrow(base)}.",
+      call = NULL)
+  }
   hat_norm <- hat
   norm_params <- NULL
   if (normalize != "none") {
     nr <- normalize_stack(hat, method = normalize, scale_fn = scale_fn)
     hat_norm    <- nr$X_norm
     norm_params <- nr
-  }
-  if (missing(base)) {
-    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
   }
   fit_obj <- if (!is.null(batch_size)) {
     .run_chunked_rml_g(approach = approach, hat = hat_norm, obs = obs,
@@ -925,11 +941,25 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
           early_stopping_rounds = early_stopping_rounds,
           validation_split = validation_split, ...)
   }
+  fit_obj$ncol_hat    <- ncol(hat)
   fit_obj$agg_mat     <- agg_mat
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "ct"
-  fit_obj
+  base_features <- apply_norm_params(base, fit_obj$norm_params)
+  bts_vec <- predict(fit_obj, newdata = base_features)
+  h_hf <- nrow(base)
+  nb   <- length(fit_obj$series_id_levels)
+  bts_mat  <- matrix(bts_vec, nrow = h_hf, ncol = nb)
+  # ctbu expects nb × h_hf — transpose
+  reco_mat <- FoReco::ctbu(t(bts_mat),
+                           agg_mat = fit_obj$agg_mat,
+                           agg_order = fit_obj$agg_order)
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit = fit_obj, framework = "Cross-temporal",
+    forecast_horizon = h_hf / m,
+    rfun = "ctrml_g", ml = approach))
+  reco_mat
 }
 
 #' @export
