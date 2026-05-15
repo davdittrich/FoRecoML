@@ -856,3 +856,158 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
     class = "rml_g_fit"
   )
 }
+
+# =============================================================================
+# T7.5: S3 methods for rml_g_fit
+# =============================================================================
+
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+#' Predict from a global ML fit object
+#'
+#' @param object An `rml_g_fit` object returned by [rml_g], [csrml_g],
+#'   [terml_g], or [ctrml_g].
+#' @param newdata Numeric matrix (`n_rows x ncol_hat`) of features.  Must
+#'   have the same column layout as the `hat` matrix used during training
+#'   (i.e. `ncol_hat` columns, no `series_id` column).
+#' @param series_id Character or factor vector of length `n_rows` giving the
+#'   series identifier for each row of `newdata`.  All values must appear in
+#'   `object$series_id_levels`.  If `NULL`, all training-level series are
+#'   cycled in order (one row of `newdata` replicated for every series level).
+#' @param ... Ignored.
+#' @return Numeric vector of predictions, one per row of the expanded
+#'   `newdata` (after `series_id` replication when `series_id = NULL`).
+#' @export
+#' @method predict rml_g_fit
+predict.rml_g_fit <- function(object, newdata, series_id = NULL, ...) {
+  if (missing(newdata) || is.null(newdata)) {
+    cli_abort("{.arg newdata} is required.", call = NULL)
+  }
+  newdata <- as.matrix(newdata)
+
+  # --- series_id resolution -------------------------------------------------
+  if (is.null(series_id)) {
+    # Broadcast: replicate each row of newdata once per training series level.
+    p <- length(object$series_id_levels)
+    series_id_chr <- rep(object$series_id_levels, each = NROW(newdata))
+    newdata <- newdata[rep(seq_len(NROW(newdata)), times = p), , drop = FALSE]
+  } else {
+    series_id_chr <- as.character(series_id)
+    unknown <- setdiff(series_id_chr, as.character(object$series_id_levels))
+    if (length(unknown) > 0L) {
+      cli_abort(
+        c(
+          "Unknown {.arg series_id} level{?s}: {.val {unknown}}.",
+          "i" = "Model was trained on: {.val {as.character(object$series_id_levels)}}."
+        ),
+        call = NULL
+      )
+    }
+  }
+
+  series_id_factor <- factor(series_id_chr, levels = object$series_id_levels)
+  series_id_int    <- as.integer(series_id_factor)
+
+  # --- backend dispatch -----------------------------------------------------
+  switch(
+    object$approach,
+    "lightgbm" = {
+      X_pred <- cbind(newdata, series_id = series_id_int)
+      predict(object$fit, X_pred)
+    },
+    "xgboost" = {
+      X_pred  <- cbind(newdata, series_id = series_id_int)
+      dpred   <- xgboost::xgb.DMatrix(X_pred)
+      predict(object$fit, dpred)
+    },
+    "ranger" = {
+      df_pred <- data.frame(
+        newdata,
+        series_id   = series_id_factor,
+        check.names = TRUE
+      )
+      predict(object$fit, data = df_pred, num.threads = 1L)$predictions
+    },
+    "mlr3" = {
+      df_pred <- data.frame(
+        newdata,
+        series_id   = series_id_factor,
+        check.names = TRUE
+      )
+      object$fit$predict_newdata(df_pred)$response
+    },
+    "catboost" = {
+      if (!requireNamespace("catboost", quietly = TRUE)) {
+        cli_abort("Package {.pkg catboost} is required for this backend.",
+                  call = NULL)
+      }
+      X_pred    <- cbind(newdata, series_id = series_id_int)
+      cat_idx   <- ncol(X_pred)  # 1-based; catboost expects 0-based
+      pool_pred <- catboost::catboost.load_pool(
+        data         = X_pred,
+        cat_features = cat_idx - 1L
+      )
+      catboost::catboost.predict(object$fit, pool_pred)
+    },
+    cli_abort("Unknown approach: {.val {object$approach}}", call = NULL)
+  )
+}
+
+#' Print an rml_g_fit object
+#'
+#' @param x An `rml_g_fit` object.
+#' @param ... Ignored.
+#' @return `x`, invisibly.
+#' @export
+#' @method print rml_g_fit
+print.rml_g_fit <- function(x, ...) {
+  cli_h1("Global ML Fit ({.cls rml_g_fit})")
+  top5 <- utils::head(as.character(x$series_id_levels), 5L)
+  suffix <- if (length(x$series_id_levels) > 5L) ", ..." else ""
+  cli_bullets(c(
+    "*" = "Approach:  {.val {x$approach}}",
+    "*" = "Framework: {.val {x$framework %||% 'unknown'}}",
+    "*" = paste0("Series:    ", length(x$series_id_levels),
+                 " (levels: ", paste(top5, collapse = ", "), suffix, ")"),
+    "*" = "Features:  {x$ncol_hat} (+ 1 series_id column)"
+  ))
+  if (!is.null(x$best_iter_history) && length(x$best_iter_history) > 0L) {
+    iters <- unlist(x$best_iter_history)
+    iters <- iters[!is.null(iters)]
+    if (length(iters) > 0L) {
+      cli_bullets(c("*" = "Best iters per batch: {iters}"))
+    }
+  }
+  invisible(x)
+}
+
+#' Summarise an rml_g_fit object
+#'
+#' Prints the object header (via [print.rml_g_fit]) and, when available,
+#' the top 10 most important features.
+#'
+#' @param object An `rml_g_fit` object.
+#' @param ... Ignored.
+#' @return `object`, invisibly.
+#' @export
+#' @method summary rml_g_fit
+summary.rml_g_fit <- function(object, ...) {
+  print(object)
+  fi <- object$feature_importance
+  if (is.null(fi) || (is.data.frame(fi) && NROW(fi) == 0L) ||
+      (is.numeric(fi) && length(fi) == 0L)) {
+    cli_inform(
+      "Feature importance not available for this backend/configuration.",
+      call = NULL
+    )
+  } else {
+    cli_h2("Feature Importance (top 10)")
+    if (is.data.frame(fi)) {
+      print(utils::head(fi, 10L))
+    } else {
+      top10 <- sort(fi, decreasing = TRUE)[seq_len(min(10L, length(fi)))]
+      print(top10)
+    }
+  }
+  invisible(object)
+}
