@@ -1,0 +1,418 @@
+# T7.2: Global ML across all bottom-series.
+# Stacks `obs` (T_obs x p) into one long training matrix with series_id as a
+# categorical feature, fits a single global model, returns an rml_g_fit object.
+# The rml_g_fit S3 methods (predict/print/...) land in T7.5.
+
+# Private helper: stack series into long-format training matrix.
+#
+# Returns:
+#   X_stacked        : (T_obs*p) x ncol(hat) numeric matrix (no series_id column)
+#   y_stacked        : length T_obs*p numeric vector
+#   series_id_factor : factor with FROZEN, alphabetically-sorted levels
+#   series_id_int    : 1-based integer (1..p) for backends that need raw ints
+#   series_id_levels : character vector of the frozen factor levels
+#   norm_params      : NULL (normalization is applied OUTSIDE by wrappers, T7.3)
+#   train_idx        : integer rows used for training (global, computed once)
+#   valid_idx        : integer rows held out for validation (may be length 0)
+#
+# Series order in the stack: column-major over `obs`, i.e. series 1 occupies the
+# first T_obs rows, series 2 the next T_obs rows, and so on.
+.stack_series <- function(hat, obs, kset = NULL,
+                          validation_split = 0,
+                          seed = NULL,
+                          min_validation_rows = 10L) {
+  # `kset` is reserved for T7.4 (temporal aggregation orders); v1 ignores it.
+
+  p <- NCOL(obs)
+  T_obs <- NROW(obs)
+
+  if (NROW(hat) != T_obs) {
+    cli_abort(
+      "{.arg hat} has {NROW(hat)} rows, {.arg obs} has {T_obs} rows; must match.",
+      call = NULL
+    )
+  }
+
+  series_names <- if (!is.null(colnames(obs))) {
+    colnames(obs)
+  } else {
+    paste0("S", seq_len(p))
+  }
+  # G5: alphabetically-sorted, frozen levels — keeps factor coding stable across
+  # train/predict and across batches in T7.4.
+  series_id_levels <- sort(unique(as.character(series_names)))
+
+  hat_mat <- if (is.matrix(hat)) hat else as.matrix(hat)
+  obs_mat <- if (is.matrix(obs)) obs else as.matrix(obs)
+
+  # rbind hat p times; the same `hat` features are shared across series.
+  X_stacked <- do.call(rbind, rep(list(hat_mat), p))
+  y_stacked <- as.numeric(obs_mat)  # column-major: series 1, series 2, ...
+
+  series_id_char <- rep(series_names, each = T_obs)
+  series_id_factor <- factor(series_id_char, levels = series_id_levels)
+  series_id_int    <- as.integer(series_id_factor)
+
+  # G4: global train/valid split computed ONCE; reused across batches in T7.4.
+  n_total <- T_obs * p
+  if (validation_split > 0) {
+    n_valid <- max(round(validation_split * n_total), 1L)
+    if (n_valid < min_validation_rows) {
+      cli_warn(
+        c(
+          "Validation set has only {n_valid} row{?s} (< {min_validation_rows}).",
+          "i" = "Early stopping disabled."
+        ),
+        call = NULL
+      )
+      valid_idx <- integer(0L)
+      train_idx <- seq_len(n_total)
+    } else {
+      if (!is.null(seed)) set.seed(seed)
+      valid_idx <- sort(sample.int(n_total, n_valid))
+      train_idx <- setdiff(seq_len(n_total), valid_idx)
+    }
+  } else {
+    train_idx <- seq_len(n_total)
+    valid_idx <- integer(0L)
+  }
+
+  list(
+    X_stacked        = X_stacked,
+    y_stacked        = y_stacked,
+    series_id_factor = series_id_factor,
+    series_id_int    = series_id_int,
+    series_id_levels = series_id_levels,
+    norm_params      = NULL,
+    train_idx        = train_idx,
+    valid_idx        = valid_idx
+  )
+}
+
+#' Fit a global ML model across all bottom-series
+#'
+#' Stacks all series into a single training set with `series_id` as a
+#' categorical feature, fits one model across all series, and returns an
+#' `rml_g_fit` object. Per-series predictions are produced by the
+#' (forthcoming) `predict.rml_g_fit` method (T7.5).
+#'
+#' @param approach character; one of `"lightgbm"`, `"xgboost"`, `"ranger"`,
+#'   `"mlr3"`, `"catboost"`.
+#' @param hat numeric matrix of features, dimension `T_obs x ncol_hat`.
+#'   Shared across series.
+#' @param obs numeric matrix of observations, dimension `T_obs x p`, where
+#'   `p` is the number of bottom-series.
+#' @param params named list of backend-specific hyperparameters.
+#' @param seed integer seed for reproducibility.
+#' @param early_stopping_rounds integer; `0` disables early stopping.
+#' @param validation_split fraction of stacked rows reserved for validation
+#'   (`0` disables).
+#' @param ... passed to backend.
+#' @return list of class `rml_g_fit` with elements `fit`, `approach`,
+#'   `series_id_levels`, `feature_importance`, `ncol_hat`.
+#' @export
+rml_g <- function(approach, hat, obs, params = NULL, seed = NULL,
+                  early_stopping_rounds = 0L,
+                  validation_split = 0,
+                  ...) {
+  class(approach) <- c(approach, class(approach))
+  UseMethod("rml_g", approach)
+}
+
+#' @export
+#' @method rml_g lightgbm
+rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
+                           early_stopping_rounds = 0L,
+                           validation_split = 0,
+                           ...) {
+  stack <- .stack_series(hat, obs,
+                         validation_split = validation_split,
+                         seed = seed)
+
+  # G6: integer-encoded categorical feature; lightgbm wants the column index
+  # marked via `categorical_feature`.
+  X_train <- cbind(stack$X_stacked[stack$train_idx, , drop = FALSE],
+                   series_id = stack$series_id_int[stack$train_idx])
+  y_train <- stack$y_stacked[stack$train_idx]
+
+  cat_col_idx <- ncol(X_train)  # 1-based; the last column is series_id.
+
+  lgb_params <- list(
+    objective   = "regression",
+    metric      = "rmse",
+    num_threads = 1L,
+    verbose     = -1L
+  )
+  if (!is.null(seed))   lgb_params$seed <- as.integer(seed)
+  if (!is.null(params)) lgb_params <- utils::modifyList(lgb_params, params)
+  nrounds <- if (!is.null(params$num_iteration)) params$num_iteration else 100L
+
+  dtrain <- lightgbm::lgb.Dataset(
+    data                = X_train,
+    label               = y_train,
+    categorical_feature = cat_col_idx,
+    free_raw_data       = FALSE
+  )
+
+  valids <- list()
+  es_rounds <- NULL
+  if (length(stack$valid_idx) > 0L && early_stopping_rounds > 0L) {
+    X_valid <- cbind(stack$X_stacked[stack$valid_idx, , drop = FALSE],
+                     series_id = stack$series_id_int[stack$valid_idx])
+    dvalid <- lightgbm::lgb.Dataset.create.valid(
+      dtrain,
+      data  = X_valid,
+      label = stack$y_stacked[stack$valid_idx]
+    )
+    valids   <- list(valid = dvalid)
+    es_rounds <- as.integer(early_stopping_rounds)
+  }
+
+  fit <- lightgbm::lgb.train(
+    params                = lgb_params,
+    data                  = dtrain,
+    nrounds               = nrounds,
+    valids                = valids,
+    early_stopping_rounds = es_rounds,
+    verbose               = -1L
+  )
+
+  feature_importance <- tryCatch(
+    lightgbm::lgb.importance(fit, percentage = TRUE),
+    error = function(e) NULL
+  )
+
+  structure(
+    list(
+      fit                = fit,
+      approach           = "lightgbm",
+      series_id_levels   = stack$series_id_levels,
+      feature_importance = feature_importance,
+      ncol_hat           = ncol(hat)
+    ),
+    class = "rml_g_fit"
+  )
+}
+
+#' @export
+#' @method rml_g xgboost
+rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
+                          early_stopping_rounds = 0L,
+                          validation_split = 0,
+                          ...) {
+  stack <- .stack_series(hat, obs,
+                         validation_split = validation_split,
+                         seed = seed)
+
+  # xgboost has no native categorical handling in this version; use the
+  # G5-frozen factor-as-integer encoding directly as a numeric column.
+  X_train_mat <- cbind(stack$X_stacked[stack$train_idx, , drop = FALSE],
+                       series_id = stack$series_id_int[stack$train_idx])
+
+  dtrain <- xgboost::xgb.DMatrix(
+    data  = X_train_mat,
+    label = stack$y_stacked[stack$train_idx]
+  )
+
+  xgb_params <- list(
+    objective = "reg:squarederror",
+    nthread   = 1L,
+    verbosity = 0L
+  )
+  if (!is.null(seed))   xgb_params$seed <- as.integer(seed)
+  if (!is.null(params)) xgb_params <- utils::modifyList(xgb_params, params)
+  nrounds <- if (!is.null(params$nrounds)) params$nrounds else 100L
+
+  evals <- list()
+  if (length(stack$valid_idx) > 0L && early_stopping_rounds > 0L) {
+    X_valid_mat <- cbind(stack$X_stacked[stack$valid_idx, , drop = FALSE],
+                         series_id = stack$series_id_int[stack$valid_idx])
+    dvalid <- xgboost::xgb.DMatrix(
+      data  = X_valid_mat,
+      label = stack$y_stacked[stack$valid_idx]
+    )
+    evals <- list(valid = dvalid)
+  }
+
+  fit <- xgboost::xgb.train(
+    params                = xgb_params,
+    data                  = dtrain,
+    nrounds               = nrounds,
+    evals                 = evals,
+    early_stopping_rounds = if (length(evals) > 0L) early_stopping_rounds else NULL,
+    verbose               = 0L
+  )
+
+  feature_importance <- tryCatch(
+    xgboost::xgb.importance(model = fit),
+    error = function(e) NULL
+  )
+
+  structure(
+    list(
+      fit                = fit,
+      approach           = "xgboost",
+      series_id_levels   = stack$series_id_levels,
+      feature_importance = feature_importance,
+      ncol_hat           = ncol(hat)
+    ),
+    class = "rml_g_fit"
+  )
+}
+
+#' @export
+#' @method rml_g ranger
+rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
+                         early_stopping_rounds = 0L,
+                         validation_split = 0,
+                         ...) {
+  if (early_stopping_rounds > 0L) {
+    cli_inform(
+      "ranger does not support early stopping; {.arg early_stopping_rounds} ignored.",
+      call = NULL
+    )
+  }
+
+  stack <- .stack_series(hat, obs,
+                         validation_split = validation_split,
+                         seed = seed)
+
+  df_train <- data.frame(
+    stack$X_stacked[stack$train_idx, , drop = FALSE],
+    series_id   = stack$series_id_factor[stack$train_idx],
+    .y          = stack$y_stacked[stack$train_idx],
+    check.names = TRUE
+  )
+
+  ranger_params <- list(num.trees = 500L, num.threads = 1L, importance = "impurity")
+  if (!is.null(seed))   ranger_params$seed <- as.integer(seed)
+  if (!is.null(params)) ranger_params <- utils::modifyList(ranger_params, params)
+
+  fit <- do.call(ranger::ranger, c(
+    list(formula = .y ~ ., data = df_train, verbose = FALSE),
+    ranger_params
+  ))
+
+  feature_importance <- tryCatch(fit$variable.importance, error = function(e) NULL)
+
+  structure(
+    list(
+      fit                = fit,
+      approach           = "ranger",
+      series_id_levels   = stack$series_id_levels,
+      feature_importance = feature_importance,
+      ncol_hat           = ncol(hat)
+    ),
+    class = "rml_g_fit"
+  )
+}
+
+#' @export
+#' @method rml_g mlr3
+rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
+                       early_stopping_rounds = 0L,
+                       validation_split = 0,
+                       ...) {
+  stack <- .stack_series(hat, obs,
+                         validation_split = validation_split,
+                         seed = seed)
+
+  df_train <- data.frame(
+    stack$X_stacked[stack$train_idx, , drop = FALSE],
+    series_id   = stack$series_id_factor[stack$train_idx],
+    .y          = stack$y_stacked[stack$train_idx],
+    check.names = TRUE
+  )
+
+  task <- mlr3::TaskRegr$new(id = "rml_g", backend = df_train, target = ".y")
+
+  learner_id <- if (!is.null(params$learner)) params$learner else "regr.ranger"
+  learner    <- mlr3::lrn(learner_id, num.threads = 1L)
+  if (!is.null(seed)) {
+    try(learner$param_set$set_values(seed = as.integer(seed)), silent = TRUE)
+  }
+
+  learner$train(task)
+
+  feature_importance <- tryCatch(learner$importance(), error = function(e) NULL)
+
+  structure(
+    list(
+      fit                = learner,
+      approach           = "mlr3",
+      series_id_levels   = stack$series_id_levels,
+      feature_importance = feature_importance,
+      ncol_hat           = ncol(hat)
+    ),
+    class = "rml_g_fit"
+  )
+}
+
+#' @export
+#' @method rml_g catboost
+rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
+                           early_stopping_rounds = 0L,
+                           validation_split = 0,
+                           ...) {
+  if (!requireNamespace("catboost", quietly = TRUE)) {
+    cli_abort(
+      "Package {.pkg catboost} required for {.code approach = \"catboost\"}.",
+      call = NULL
+    )
+  }
+
+  stack <- .stack_series(hat, obs,
+                         validation_split = validation_split,
+                         seed = seed)
+
+  X_train <- cbind(stack$X_stacked[stack$train_idx, , drop = FALSE],
+                   series_id = stack$series_id_int[stack$train_idx])
+
+  cat_feat_idx <- ncol(X_train) - 1L  # 0-based for catboost.
+
+  pool_train <- catboost::catboost.load_pool(
+    data         = X_train,
+    label        = stack$y_stacked[stack$train_idx],
+    cat_features = cat_feat_idx
+  )
+
+  cb_params <- list(
+    loss_function = "RMSE",
+    iterations    = if (!is.null(params$iterations)) params$iterations else 100L,
+    thread_count  = 1L,
+    logging_level = "Silent"
+  )
+  if (!is.null(seed))   cb_params$random_seed <- as.integer(seed)
+  if (!is.null(params)) cb_params <- utils::modifyList(cb_params, params)
+
+  pool_valid <- NULL
+  if (length(stack$valid_idx) > 0L && early_stopping_rounds > 0L) {
+    X_valid <- cbind(stack$X_stacked[stack$valid_idx, , drop = FALSE],
+                     series_id = stack$series_id_int[stack$valid_idx])
+    pool_valid <- catboost::catboost.load_pool(
+      data         = X_valid,
+      label        = stack$y_stacked[stack$valid_idx],
+      cat_features = cat_feat_idx
+    )
+    cb_params$od_type <- "Iter"
+    cb_params$od_wait <- as.integer(early_stopping_rounds)
+  }
+
+  fit <- catboost::catboost.train(pool_train, pool_valid, params = cb_params)
+
+  feature_importance <- tryCatch(
+    catboost::catboost.get_feature_importance(fit),
+    error = function(e) NULL
+  )
+
+  structure(
+    list(
+      fit                = fit,
+      approach           = "catboost",
+      series_id_levels   = stack$series_id_levels,
+      feature_importance = feature_importance,
+      ncol_hat           = ncol(hat)
+    ),
+    class = "rml_g_fit"
+  )
+}
