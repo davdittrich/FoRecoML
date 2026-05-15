@@ -688,37 +688,7 @@ csrml_g <- function(base, hat, obs, agg_mat,
   fit_obj$agg_mat     <- agg_mat
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "cs"
-
-  # --- prediction + reconciliation pipeline -----------------------------------
-  # Step 1: apply stored normalization if used during training.
-  # base is already h×n (horizons × series), matching hat's column layout — no transpose needed.
-  base_features <- if (!is.null(fit_obj$norm_params)) {
-    apply_norm_params(base, fit_obj$norm_params)
-  } else {
-    base
-  }
-
-  # Step 2: predict — series_id=NULL broadcasts over nb bottom series (series-major)
-  # Output: numeric vector length h*nb = [s1_h1..hh, s2_h1..hh, ..., snb_h1..hh]
-  bts_vec <- predict(fit_obj, newdata = base_features)
-
-  # Step 3: reshape to h × nb (column j = series j across all horizons)
-  nb <- length(fit_obj$series_id_levels)
-  bts_mat <- matrix(bts_vec, nrow = nrow(base), ncol = nb)
-
-  # Step 4: csbu expects nb × h — transpose then reconcile
-  reco_mat <- FoReco::csbu(t(bts_mat), agg_mat = fit_obj$agg_mat)
-
-  # Step 5: attach fit for downstream extract_reconciled_ml()
-  attr(reco_mat, "FoReco") <- new_foreco_info(list(
-    fit        = fit_obj,
-    framework  = "Cross-sectional",
-    forecast_horizon = NROW(reco_mat),
-    cs_n       = ncol(base),
-    rfun       = "csrml_g",
-    ml         = approach
-  ))
-  reco_mat
+  fit_obj
 }
 
 #' Temporal reconciliation with a global ML model
@@ -809,32 +779,7 @@ terml_g <- function(base, hat, obs, agg_order,
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "te"
-
-  # --- prediction + reconciliation pipeline -----------------------------------
-  # base is h×n (horizons × series features), matching hat's column layout — no transpose needed.
-  base_features <- if (!is.null(fit_obj$norm_params)) {
-    apply_norm_params(base, fit_obj$norm_params)
-  } else {
-    base
-  }
-  bts_vec <- predict(fit_obj, newdata = base_features)
-  nb      <- length(fit_obj$series_id_levels)
-  bts_mat <- matrix(bts_vec, nrow = nrow(base), ncol = nb)
-  # tebu expects a vector (hm×1) per series; apply per row of t(bts_mat) = nb × h
-  bts_t   <- t(bts_mat)  # nb × h
-  reco_list <- lapply(seq_len(nb), function(j) {
-    FoReco::tebu(bts_t[j, ], agg_order = fit_obj$agg_order)
-  })
-  reco_mat <- do.call(rbind, reco_list)
-  rownames(reco_mat) <- fit_obj$series_id_levels
-  attr(reco_mat, "FoReco") <- new_foreco_info(list(
-    fit              = fit_obj,
-    framework        = "Temporal",
-    forecast_horizon = ncol(reco_mat),
-    rfun             = "terml_g",
-    ml               = approach
-  ))
-  reco_mat
+  fit_obj
 }
 
 #' Cross-temporal reconciliation with a global ML model
@@ -932,27 +877,7 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "ct"
-
-  # --- prediction + reconciliation pipeline -----------------------------------
-  # base is h×n (horizons × series features), matching hat's column layout — no transpose needed.
-  base_features <- if (!is.null(fit_obj$norm_params)) {
-    apply_norm_params(base, fit_obj$norm_params)
-  } else {
-    base
-  }
-  bts_vec <- predict(fit_obj, newdata = base_features)
-  nb      <- length(fit_obj$series_id_levels)
-  bts_mat <- matrix(bts_vec, nrow = nrow(base), ncol = nb)
-  # ctbu expects nb × hm — transpose then reconcile
-  reco_mat <- FoReco::ctbu(t(bts_mat), agg_mat = fit_obj$agg_mat, agg_order = fit_obj$agg_order)
-  attr(reco_mat, "FoReco") <- new_foreco_info(list(
-    fit              = fit_obj,
-    framework        = "Cross-temporal",
-    forecast_horizon = nrow(reco_mat),
-    rfun             = "ctrml_g",
-    ml               = approach
-  ))
-  reco_mat
+  fit_obj
 }
 
 #' @export
