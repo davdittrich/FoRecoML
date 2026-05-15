@@ -234,7 +234,12 @@ available_ram_bytes <- function() {
 # lightgbm: use native lgb.save (the same C++ pointer constraint applies).
 # everything else (randomForest, mlr3): qs2 round-trip is safe (verified).
 serialize_fit <- function(model, dir, i, approach) {
-  ext <- if (approach == "lightgbm") ".lgb" else ".qs2"
+  ext <- switch(
+    approach,
+    "lightgbm" = ".lgb",
+    "catboost"  = ".cbm",
+    ".qs2"
+  )
   path <- file.path(dir, sprintf("fit_%d%s", i, ext))
   # B7: cap qs2 nthreads at min(detectCores(), 4L). Capping at 4 avoids
   # diminishing returns from contention on small per-series fits while still
@@ -243,8 +248,9 @@ serialize_fit <- function(model, dir, i, approach) {
   if (!is.finite(nth) || nth < 1L) nth <- 1L
   switch(
     approach,
-    "xgboost" = qs2::qs_save(xgboost::xgb.save.raw(model), path, nthreads = nth),
+    "xgboost"  = qs2::qs_save(xgboost::xgb.save.raw(model), path, nthreads = nth),
     "lightgbm" = lightgbm::lgb.save(model, filename = path),
+    "catboost"  = catboost::catboost.save_model(model, path),
     qs2::qs_save(model, path, nthreads = nth)
   )
   path
@@ -253,8 +259,9 @@ serialize_fit <- function(model, dir, i, approach) {
 deserialize_fit <- function(path, approach) {
   switch(
     approach,
-    "xgboost" = xgboost::xgb.load.raw(qs2::qs_read(path)),
+    "xgboost"  = xgboost::xgb.load.raw(qs2::qs_read(path)),
     "lightgbm" = lightgbm::lgb.load(filename = path),
+    "catboost"  = catboost::catboost.load_model(path),
     qs2::qs_read(path)
   )
 }

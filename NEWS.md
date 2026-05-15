@@ -13,6 +13,9 @@
 
 ## New features
 
+* New `approach = "catboost"` per-series backend. Install via the catboost R
+  package (not on CRAN; see catboost documentation). Supports checkpoint
+  serialization to `.cbm` files via `catboost::catboost.save_model()`.
 * New `approach = "ranger"` backend (now the default). Uses the
   `ranger` package with `num.threads = 1L` (per-series models are too
   small to benefit from intra-tree threading; the outer rml() loop is

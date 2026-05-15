@@ -478,6 +478,63 @@ rml.randomForest <- function(
   )
 }
 
+# T6: catboost backend. Works with matrices directly (no formula interface).
+# thread_count = 1L: same rationale as ranger — per-series models are tiny.
+# random_seed is optional; omitted when NULL so catboost uses its own default.
+# Checkpoint format: native .cbm (catboost binary model), not qs2.
+rml.catboost <- function(
+  y = NULL,
+  X = NULL,
+  Xtest = NULL,
+  fit = NULL,
+  params = NULL,
+  ...
+) {
+  if (is.null(fit)) {
+    if (is.null(y) && is.null(X)) {
+      cli_abort(
+        c(
+          "Mandatory arguments:",
+          "1. {.arg y} and {.arg X};",
+          "2. {.arg fit} and {.arg Xtest}."
+        ),
+        call = NULL
+      )
+    }
+    if (!requireNamespace("catboost", quietly = TRUE)) {
+      cli_abort(
+        paste0(
+          "Package {.pkg catboost} required for {.code approach = \"catboost\"}. ",
+          "See https://catboost.ai/en/docs/installation/r-package-install"
+        ),
+        call = NULL
+      )
+    }
+    iterations <- if (is.null(params$iterations)) 500L else as.integer(params$iterations)
+    depth      <- if (is.null(params$depth))      6L   else as.integer(params$depth)
+    seed_i     <- params$random_seed
+
+    pool <- catboost::catboost.load_pool(data = as.matrix(X), label = y)
+    cb_params <- list(
+      loss_function = "RMSE",
+      iterations    = iterations,
+      depth         = depth,
+      thread_count  = 1L,
+      logging_level = "Silent"
+    )
+    if (!is.null(seed_i)) cb_params$random_seed <- as.integer(seed_i)
+    fit <- catboost::catboost.train(pool, NULL, params = cb_params)
+  }
+
+  bts <- NULL
+  if (!is.null(Xtest)) {
+    test_pool <- catboost::catboost.load_pool(data = as.matrix(Xtest))
+    bts <- catboost::catboost.predict(fit, test_pool)
+  }
+
+  return(list(bts = bts, fit = fit))
+}
+
 # T5: ranger backend. Mirrors rml.randomForest contract but uses ranger's
 # data.frame interface (no matrix-mode equivalent that handles factor +
 # numeric mixes cleanly). num.threads = 1L: per-series trees are tiny and
