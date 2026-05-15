@@ -326,6 +326,13 @@ csrml_fit <- function(
   tuning = NULL,
   checkpoint = "auto"
 ) {
+  if (identical(approach, "randomForest")) {
+    lifecycle::deprecate_soft(
+      when    = "2.0.0",
+      what    = "csrml_fit(approach = 'randomForest')",
+      details = "Use approach = 'ranger' instead; ranger is faster and statistically equivalent."
+    )
+  }
   if (missing(agg_mat)) {
     cli_abort(
       "Argument {.arg agg_mat} is missing, with no default.",

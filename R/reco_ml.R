@@ -585,6 +585,12 @@ rml.ranger <- function(
   bts <- NULL
   if (!is.null(Xtest)) {
     df_test <- data.frame(as.matrix(Xtest), check.names = TRUE)
+    # Align column names with training df (excluding .y) to survive check.names mangling.
+    if (!is.null(fit$forest)) {
+      train_vars <- fit$forest$independent.variable.names
+      if (length(train_vars) == ncol(df_test))
+        names(df_test) <- train_vars
+    }
     bts <- predict(fit, data = df_test, num.threads = 1L)$predictions
   }
 

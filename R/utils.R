@@ -483,10 +483,15 @@ normalize_stack <- function(X, method = c("zscore", "robust"), scale_fn = "gmd")
 .robscale_fn <- function(scale_fn) {
   switch(scale_fn,
     "gmd" = function(x, na.rm) {
-      # Gini mean difference: mean(|x_i - x_j|) for i < j, scaled for consistency
+      # Gini mean difference via sorted-order trick: O(n log n), O(n) memory.
+      # outer(x, x) is O(n^2) and OOMs for large columns.
       x <- if (na.rm) x[!is.na(x)] else x
-      if (length(x) < 2) return(0)
-      mean(abs(outer(x, x, "-")[upper.tri(matrix(0, length(x), length(x)))]))
+      n <- length(x)
+      if (n < 2L) return(0)
+      x <- sort.int(x)
+      w <- 2L * seq_len(n) - n - 1L
+      # sorted order: sum_{i<j}(x_j - x_i) = sum_j x_j*(2j-n-1), all terms non-negative
+      sum(w * x) / (n * (n - 1L) / 2L)
     },
     "mad_scaled" = function(x, na.rm) {
       mad(x, na.rm = na.rm)   # mad() already has constant=1.4826
