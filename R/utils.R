@@ -479,6 +479,13 @@ normalize_stack <- function(X, method = c("zscore", "robust"), scale_fn = "gmd")
   list(X_norm = X_norm, center = center, scale = scale)
 }
 
+apply_norm_params <- function(X_new, norm_params) {
+  if (is.null(norm_params)) return(X_new)
+  X_new <- sweep(X_new, 2, norm_params$center, "-")
+  X_new <- sweep(X_new, 2, norm_params$scale, "/")
+  X_new
+}
+
 # Returns a function that computes the robust scale for a single column vector.
 .robscale_fn <- function(scale_fn) {
   switch(scale_fn,
