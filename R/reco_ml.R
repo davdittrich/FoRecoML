@@ -8,6 +8,10 @@ rml <- function(
   params = NULL,
   seed = NULL,
   keep_cols = NULL,
+  kset = NULL,
+  h = NULL,
+  h_base = NULL,
+  n = NULL,
   checkpoint = "auto",
   ...
 ) {
@@ -62,17 +66,39 @@ rml <- function(
   # If `keep_cols` is supplied by the caller (T5 path), hat/base are ALREADY
   # column-sliced and full feature width must be derived from sel_mat dims.
   # Otherwise (legacy/csrml path) derive keep_cols from sel_mat and slice here.
+  # T3: when `kset` is provided (mfh defer), hat is raw (NCOL(hat) != feature
+  # width). Compute feature width from kset+n (ctrml mfh) or length(kset) is
+  # wrong — for mfh the feature width is `n*kt` (ctrml) or `kt` (terml).
+  defer_ctrml_mfh_pre <- !is.null(kset) && !is.null(n)
+  defer_terml_mfh_pre <- !is.null(kset) && is.null(n)
   if (is.null(keep_cols)) {
-    active_ncol <- if (!is.null(hat)) NCOL(hat) else NCOL(base)
+    active_ncol <- if (defer_ctrml_mfh_pre) {
+      # mat2hmat output has h x (n*kt) cols; kt = sum(max(kset)/kset).
+      kt_local <- sum(max(kset) / kset)
+      n * kt_local
+    } else if (defer_terml_mfh_pre) {
+      sum(max(kset) / kset) # kt
+    } else if (!is.null(hat)) {
+      NCOL(hat)
+    } else {
+      NCOL(base)
+    }
     keep_cols <- sel_mat_keep_cols(sel_mat, active_ncol)
     slice <- length(keep_cols) < active_ncol
-    if (slice) {
+    if (slice && !defer_ctrml_mfh_pre && !defer_terml_mfh_pre) {
       col_map <- rep(NA_integer_, active_ncol)
       col_map[keep_cols] <- seq_along(keep_cols)
       if (!is.null(hat))  hat  <- hat[,  keep_cols, drop = FALSE]
       if (!is.null(base)) base <- base[, keep_cols, drop = FALSE]
     } else {
       col_map <- NULL
+    }
+    # T3: when deferring, never slice the raw hat with keep_cols (column
+    # semantics differ); keep_cols set above is used only to derive global_id
+    # via the standard sel_mat path. Reset to NULL so the loop body treats id
+    # as global indices into the deferred-expanded feature space.
+    if (defer_ctrml_mfh_pre || defer_terml_mfh_pre) {
+      keep_cols <- NULL
     }
   } else {
     # T5: hat/base pre-sliced. active_ncol = full feature count from sel_mat.
@@ -110,6 +136,23 @@ rml <- function(
     seq_len(p)
   }
 
+  # T3: deferred mfh expansion. When `kset != NULL`, hat/base are passed in
+  # raw (un-expanded) form and the per-series feature block is materialized
+  # only inside the loop body, then discarded. Peak memory drops from
+  # O(full hmat across iterations) to O(one series block per iter).
+  # - kset + h + n  -> ctrml mfh: hat is n x (h*kt) cross-temporal matrix.
+  # - kset + h      -> terml mfh: hat is a length h*kt vector (or 1 x L matrix).
+  defer_kset <- !is.null(kset)
+  defer_ctrml_mfh <- defer_kset && !is.null(n)
+  defer_terml_mfh <- defer_kset && is.null(n)
+  # T3: in ctrml/terml, training uses h (derived from hat) and prediction uses
+  # h_base (derived from base) which differ when forecast horizon != train h.
+  # If one is NULL fall back to the other (single-h calls; predict-only path).
+  h_train_eff <- if (!is.null(h)) h else h_base
+  h_base_eff  <- if (!is.null(h_base)) h_base else h
+  hat_vec_terml <- if (defer_terml_mfh && !is.null(hat)) as.vector(hat) else NULL
+  base_vec_terml <- if (defer_terml_mfh && !is.null(base)) as.vector(base) else NULL
+
   out <- vector("list", p)
   for (i in loop_seq) {
     global_id <- global_id_list[[i]]
@@ -117,7 +160,13 @@ rml <- function(
 
     if (is.null(fit)) {
       y <- obs[, i]
-      X <- hat[, id, drop = FALSE]
+      X <- if (defer_ctrml_mfh) {
+        mat2hmat_cols(hat, h = h_train_eff, kset = kset, n = n, cols = id)
+      } else if (defer_terml_mfh) {
+        vec2hmat_cols(hat_vec_terml, h = h_train_eff, kset = kset, cols = id)
+      } else {
+        hat[, id, drop = FALSE]
+      }
       fit_i <- NULL
 
       # spd.2: skip na.omit allocation when no NAs present.
@@ -145,7 +194,13 @@ rml <- function(
     }
 
     if (!is.null(base)) {
-      Xtest <- base[, id, drop = FALSE]
+      Xtest <- if (defer_ctrml_mfh) {
+        mat2hmat_cols(base, h = h_base_eff, kset = kset, n = n, cols = id)
+      } else if (defer_terml_mfh) {
+        vec2hmat_cols(base_vec_terml, h = h_base_eff, kset = kset, cols = id)
+      } else {
+        base[, id, drop = FALSE]
+      }
     } else {
       Xtest <- NULL
     }

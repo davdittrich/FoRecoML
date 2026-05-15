@@ -208,13 +208,15 @@ terml <- function(
     }
 
     # T5: build sel_mat BEFORE materializing hat for the non-mfh slice-first path.
-    # Non-mfh: input2rtw produces ncol = length(kset). mfh: vec2hmat path stays full.
+    # Non-mfh: input2rtw produces ncol = length(kset). T3: mfh defers vec2hmat
+    # to per-iter in rml(); raw hat is stashed as a 1 x L matrix per C.1.
     if (!grepl("mfh", features)) {
       total_cols <- length(kset)
+      h_hat <- NULL
     } else {
       h_hat <- length(hat) / kt
-      hat <- vec2hmat(vec = hat, h = h_hat, kset = kset)
-      total_cols <- NCOL(hat)
+      total_cols <- kt
+      dim(hat) <- c(1L, length(hat))
     }
     features_size <- total_cols
 
@@ -259,13 +261,22 @@ terml <- function(
       keep_cols <- NULL
     }
 
-    # Remove NA variables from sel_mat (slice-first aware).
-    na_local <- na_col_mask(hat)
+    # Remove NA variables from sel_mat (slice-first aware). T3: mfh keeps
+    # raw hat; only materialize for NA detection when anyNA(hat) is TRUE.
+    if (grepl("mfh", features)) {
+      na_local <- if (anyNA(hat)) {
+        na_col_mask(vec2hmat(vec = as.vector(hat), h = h_hat, kset = kset))
+      } else {
+        logical(total_cols)
+      }
+    } else {
+      na_local <- na_col_mask(hat)
+    }
     if (any(na_local)) {
       if (is.null(keep_cols)) {
         if (NCOL(sel_mat) == 1) {
           if (length(sel_mat) == 1) {
-            sel_mat <- rep(sel_mat, NCOL(hat))
+            sel_mat <- rep(sel_mat, total_cols)
           }
           sel_mat[na_local] <- 0
           sel_mat <- as(sel_mat, "sparseVector")
@@ -314,6 +325,8 @@ terml <- function(
     } else {
       keep_cols <- NULL
     }
+    # T3: predict-only path -> no training hat, h_hat is unused.
+    h_hat <- NULL
   }
 
   if (missing(base)) {
@@ -328,20 +341,23 @@ terml <- function(
     if (!grepl("mfh", features)) {
       base <- input2rtw_partial(base, kset, cols = keep_cols)
     } else {
-      base <- vec2hmat(vec = base, h = h, kset = kset)
+      # T3 (C.1): defer vec2hmat to per-iter rml; stash base as 1 x L matrix.
+      dim(base) <- c(1L, length(base))
     }
   }
 
-  expected_base_ncol <- if (is.null(keep_cols)) features_size else length(keep_cols)
-  if (NCOL(base) != expected_base_ncol) {
-    cli_abort(
-      paste0(
-        "The number of columns of {.arg base} ",
-        "must be equal to the number of ",
-        "features used during fitting."
-      ),
-      call = NULL
-    )
+  if (!grepl("mfh", features)) {
+    expected_base_ncol <- length(keep_cols)
+    if (NCOL(base) != expected_base_ncol) {
+      cli_abort(
+        paste0(
+          "The number of columns of {.arg base} ",
+          "must be equal to the number of ",
+          "features used during fitting."
+        ),
+        call = NULL
+      )
+    }
   }
 
   reco_mat <- rml(
@@ -355,6 +371,9 @@ terml <- function(
     tuning = tuning,
     block_sampling = block_sampling,
     keep_cols = keep_cols,
+    kset   = if (grepl("mfh", features)) kset  else NULL,
+    h      = if (grepl("mfh", features)) h_hat else NULL,
+    h_base = if (grepl("mfh", features)) h     else NULL,
     checkpoint = checkpoint
   )
 
@@ -454,12 +473,14 @@ terml_fit <- function(
   }
 
   # T5: build sel_mat BEFORE materializing hat (non-mfh slice-first).
+  # T3: mfh defers vec2hmat to per-iter inside rml(); raw hat is stashed
+  # as a 1 x L matrix per C.1.
   if (!grepl("mfh", features)) {
     total_cols <- length(kset)
   } else {
     h <- length(hat) / kt
-    hat <- vec2hmat(vec = hat, h = h, kset = kset)
-    total_cols <- NCOL(hat)
+    total_cols <- kt
+    dim(hat) <- c(1L, length(hat))
   }
 
   switch(
@@ -501,13 +522,22 @@ terml_fit <- function(
     keep_cols <- NULL
   }
 
-  # Remove NA variables from sel_mat (slice-first aware).
-  na_local <- na_col_mask(hat)
+  # Remove NA variables from sel_mat (slice-first aware). T3: for mfh defer,
+  # only materialize when raw hat actually has NAs.
+  if (grepl("mfh", features)) {
+    na_local <- if (anyNA(hat)) {
+      na_col_mask(vec2hmat(vec = as.vector(hat), h = h, kset = kset))
+    } else {
+      logical(total_cols)
+    }
+  } else {
+    na_local <- na_col_mask(hat)
+  }
   if (any(na_local)) {
     if (is.null(keep_cols)) {
       if (NCOL(sel_mat) == 1) {
         if (length(sel_mat) == 1) {
-          sel_mat <- rep(sel_mat, NCOL(hat))
+          sel_mat <- rep(sel_mat, total_cols)
         }
         sel_mat[na_local] <- 0
         sel_mat <- as(sel_mat, "sparseVector")
@@ -541,6 +571,8 @@ terml_fit <- function(
     tuning = tuning,
     block_sampling = block_sampling,
     keep_cols = keep_cols,
+    kset = if (grepl("mfh", features)) kset else NULL,
+    h    = if (grepl("mfh", features)) h    else NULL,
     checkpoint = checkpoint
   )
 

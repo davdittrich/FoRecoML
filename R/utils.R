@@ -314,6 +314,22 @@ input2rtw_partial <- function(x, kset, cols) {
   mat[, order(match(global_cols, cols)), drop = FALSE]
 }
 
+# T3 (spd.12/13): per-iteration column-slice helpers for deferred hat/base
+# expansion in mfh paths. Materializes the full hmat once per call but returns
+# only the requested columns; the full expansion is never held across the rml
+# training loop. Memory peak drops from O(full_hmat + p models) to
+# O(1 series block + 1 model) per iteration.
+#
+# mat2hmat_cols: cross-temporal (ctrml mfh). x is n x (h*kt). Returns h x len(cols).
+mat2hmat_cols <- function(x, h, kset, n, cols) {
+  mat2hmat(x, h = h, kset = kset, n = n)[, cols, drop = FALSE]
+}
+
+# vec2hmat_cols: temporal (terml mfh). vec is length h*kt. Returns h x len(cols).
+vec2hmat_cols <- function(vec, h, kset, cols) {
+  vec2hmat(vec = vec, h = h, kset = kset)[, cols, drop = FALSE]
+}
+
 # Build a column-replicated sparse 0/1 indicator matrix:
 # `length(idx) x n_cols` sparse matrix where each column equals `idx`.
 #
