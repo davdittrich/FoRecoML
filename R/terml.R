@@ -165,6 +165,13 @@ terml <- function(
   fit = NULL,
   checkpoint = "auto"
 ) {
+  if (identical(approach, "randomForest")) {
+    lifecycle::deprecate_soft(
+      when    = "2.0.0",
+      what    = "terml(approach = 'randomForest')",
+      details = "Use approach = 'ranger' instead; ranger is faster and statistically equivalent."
+    )
+  }
   if (is.null(fit)) {
     if (missing(agg_order)) {
       cli_abort(

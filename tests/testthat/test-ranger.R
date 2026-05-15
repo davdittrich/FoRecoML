@@ -124,15 +124,11 @@ if (require(testthat)) {
     fx <- make_small_fixture()
     # testthat already sets lifecycle_verbosity = "warning" by default; we
     # just verify a warning is emitted matching the deprecation message.
-    old <- options(lifecycle_verbosity = "warning")
-    on.exit(options(old), add = TRUE)
-    expect_warning(
+    lifecycle::expect_deprecated(
       csrml(
         base = fx$base, hat = fx$hat, obs = fx$obs, agg_mat = fx$agg_mat,
         approach = "randomForest", features = "all"
-      ),
-      regexp = "ranger|deprecated|randomForest",
-      ignore.case = TRUE
+      )
     )
   })
 

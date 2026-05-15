@@ -420,15 +420,6 @@ rml.randomForest <- function(
   ...
 ) {
   if (is.null(fit)) {
-    # T5: soft-deprecate randomForest; ranger is the new default.
-    lifecycle::deprecate_soft(
-      when = "2.0.0",
-      what = I("`approach = \"randomForest\"`"),
-      details = paste0(
-        "Use `approach = \"ranger\"` instead; ranger is faster and ",
-        "statistically equivalent."
-      )
-    )
     if (is.null(y) && is.null(X)) {
       cli_abort(
         c(

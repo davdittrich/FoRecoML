@@ -252,6 +252,13 @@ ctrml <- function(
   fit = NULL,
   checkpoint = "auto"
 ) {
+  if (identical(approach, "randomForest")) {
+    lifecycle::deprecate_soft(
+      when    = "2.0.0",
+      what    = "ctrml(approach = 'randomForest')",
+      details = "Use approach = 'ranger' instead; ranger is faster and statistically equivalent."
+    )
+  }
   if (is.null(fit)) {
     # Check if 'agg_order' is provided
     if (missing(agg_order)) {
