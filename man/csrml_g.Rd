@@ -16,6 +16,10 @@ csrml_g(
   seed = NULL,
   early_stopping_rounds = 0L,
   validation_split = 0,
+  batch_size = NULL,
+  chunk_strategy = c("sequential", "random"),
+  batch_checkpoint_dir = NULL,
+  nrounds_per_batch = 50L,
   ...
 )
 }

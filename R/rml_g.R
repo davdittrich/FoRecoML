@@ -348,6 +348,235 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
   )
 }
 
+# =========================================================================
+# T7.4: Chunked incremental training (warm-start + OOM fallback).
+# =========================================================================
+
+# Compute auto batch_size based on available RAM and per-series memory estimate.
+# Returns an integer in [1, p].
+.auto_batch_size <- function(T_obs, ncol_hat, approach = "lightgbm", p) {
+  avail_bytes <- tryCatch({
+    a <- available_ram_bytes()
+    if (is.na(a)) 4e9 else a * 0.5
+  }, error = function(e) 4e9)
+  per_series_bytes <- as.numeric(T_obs) * as.numeric(ncol_hat + 1L) * 8 +
+                      as.numeric(ncol_hat + 1L) * 64
+  batch <- as.integer(floor(avail_bytes / per_series_bytes))
+  max(1L, min(batch, as.integer(p)))
+}
+
+# Internal lightgbm batch fit with warm-start.
+.rml_g_lightgbm_batch <- function(hat, obs_chunk, params, seed,
+                                  nrounds, prev_model, ...) {
+  stack <- .stack_series(hat, obs_chunk)
+  X_train <- cbind(stack$X_stacked[stack$train_idx, , drop = FALSE],
+                   series_id = stack$series_id_int[stack$train_idx])
+  y_train <- stack$y_stacked[stack$train_idx]
+  cat_col_idx <- ncol(X_train)
+
+  lgb_params <- list(
+    objective   = "regression",
+    metric      = "rmse",
+    num_threads = 1L,
+    verbose     = -1L
+  )
+  if (!is.null(seed))   lgb_params$seed <- as.integer(seed)
+  if (!is.null(params)) lgb_params <- utils::modifyList(lgb_params, params)
+
+  dtrain <- lightgbm::lgb.Dataset(
+    data                = X_train,
+    label               = y_train,
+    categorical_feature = cat_col_idx,
+    free_raw_data       = FALSE
+  )
+
+  fit <- lightgbm::lgb.train(
+    params     = lgb_params,
+    data       = dtrain,
+    nrounds    = nrounds,
+    init_model = prev_model,
+    verbose    = -1L
+  )
+  list(fit = fit)
+}
+
+# Internal xgboost batch fit with warm-start (xgb_model =).
+.rml_g_xgboost_batch <- function(hat, obs_chunk, params, seed,
+                                 nrounds, prev_model, ...) {
+  stack <- .stack_series(hat, obs_chunk)
+  X_train_mat <- cbind(stack$X_stacked[stack$train_idx, , drop = FALSE],
+                       series_id = stack$series_id_int[stack$train_idx])
+  dtrain <- xgboost::xgb.DMatrix(
+    data  = X_train_mat,
+    label = stack$y_stacked[stack$train_idx]
+  )
+  xgb_params <- list(
+    objective = "reg:squarederror",
+    nthread   = 1L,
+    verbosity = 0L
+  )
+  if (!is.null(seed))   xgb_params$seed <- as.integer(seed)
+  if (!is.null(params)) xgb_params <- utils::modifyList(xgb_params, params)
+
+  fit <- xgboost::xgb.train(
+    params    = xgb_params,
+    data      = dtrain,
+    nrounds   = nrounds,
+    xgb_model = prev_model,
+    verbose   = 0L
+  )
+  list(fit = fit)
+}
+
+# Run rml_g in chunks over series with warm-start (lightgbm/xgboost),
+# OOM fallback (halve batch_size up to 3 retries), and per-batch checkpoints.
+.run_chunked_rml_g <- function(approach, hat, obs, params, seed,
+                               early_stopping_rounds, validation_split,
+                               batch_size, chunk_strategy,
+                               batch_checkpoint_dir, nrounds_per_batch, ...) {
+  p        <- NCOL(obs)
+  T_obs    <- NROW(obs)
+  ncol_hat <- NCOL(hat)
+
+  bs <- if (identical(batch_size, "auto")) {
+    .auto_batch_size(T_obs, ncol_hat, approach, p)
+  } else {
+    as.integer(batch_size)
+  }
+
+  # catboost has no model-continuation in the R API.
+  if (approach == "catboost" && bs < p) {
+    cli_abort(
+      paste0(
+        "Chunked training (batch_size < p) is not supported for ",
+        "{.val catboost}: the catboost R API has no model-continuation ",
+        "(warm-start). Use {.val lightgbm} or {.val xgboost} for ",
+        "incremental training."
+      ),
+      call = NULL
+    )
+  }
+
+  # Single-batch: delegate to rml_g (no warm-start needed).
+  if (bs >= p) {
+    return(rml_g(approach = approach, hat = hat, obs = obs,
+                 params = params, seed = seed,
+                 early_stopping_rounds = early_stopping_rounds,
+                 validation_split = validation_split, ...))
+  }
+
+  chunk_strategy <- match.arg(chunk_strategy, c("sequential", "random"))
+  series_idx <- seq_len(p)
+  if (chunk_strategy == "random") {
+    if (!is.null(seed)) set.seed(seed)
+    series_idx <- sample(series_idx)
+  }
+  chunks <- split(series_idx, ceiling(seq_along(series_idx) / bs))
+
+  # Per-batch early stopping with global validation split: not yet supported.
+  if (validation_split > 0 && early_stopping_rounds > 0L) {
+    cli_inform(
+      paste0(
+        "Per-batch early stopping with global validation_split is not yet ",
+        "supported in chunked mode. Early stopping disabled."
+      )
+    )
+    early_stopping_rounds <- 0L
+    validation_split      <- 0
+  }
+
+  if (!is.null(batch_checkpoint_dir)) {
+    dir.create(batch_checkpoint_dir, showWarnings = FALSE, recursive = TRUE)
+  }
+
+  prev_model        <- NULL
+  best_iter_history <- vector("list", length(chunks))
+  batch_indices     <- chunks
+  retry_bs          <- bs
+
+  for (chunk_i in seq_along(chunks)) {
+    idx       <- chunks[[chunk_i]]
+    obs_chunk <- obs[, idx, drop = FALSE]
+
+    ckpt_path <- if (!is.null(batch_checkpoint_dir)) {
+      file.path(batch_checkpoint_dir, paste0("batch_", chunk_i, ".qs2"))
+    } else {
+      NULL
+    }
+
+    if (!is.null(ckpt_path) && file.exists(ckpt_path)) {
+      prev_model <- qs2::qs_read(ckpt_path)
+      next
+    }
+
+    fit_chunk <- NULL
+    for (attempt in 1:4) {
+      fit_chunk <- tryCatch({
+        if (approach == "lightgbm") {
+          .rml_g_lightgbm_batch(hat, obs_chunk, params, seed,
+                                nrounds_per_batch, prev_model = prev_model, ...)
+        } else if (approach == "xgboost") {
+          .rml_g_xgboost_batch(hat, obs_chunk, params, seed,
+                               nrounds_per_batch, prev_model = prev_model, ...)
+        } else {
+          # ranger / mlr3: no warm-start. Fit fresh on chunk.
+          rml_g(approach = approach, hat = hat, obs = obs_chunk,
+                params = params, seed = seed, ...)
+        }
+      }, error = function(e) {
+        if (grepl("bad_alloc|cannot allocate|out of memory",
+                  conditionMessage(e), ignore.case = TRUE) &&
+            attempt <= 3L) {
+          retry_bs <<- max(1L, as.integer(retry_bs / 2L))
+          cli_alert_warning(
+            "OOM in batch {chunk_i}, halving batch_size to {retry_bs} (attempt {attempt}/3)."
+          )
+          NULL
+        } else {
+          stop(e)
+        }
+      })
+      if (!is.null(fit_chunk)) break
+    }
+
+    if (is.null(fit_chunk)) {
+      cli_abort(
+        "OOM: failed after 3 retries. Reduce batch_size or use a machine with more RAM."
+      )
+    }
+
+    bi <- NULL
+    if (!is.null(fit_chunk$fit$best_iter)) {
+      bi <- fit_chunk$fit$best_iter
+    } else if (!is.null(fit_chunk$fit$best_iteration)) {
+      bi <- fit_chunk$fit$best_iteration
+    }
+    best_iter_history[[chunk_i]] <- bi
+
+    if (!is.null(ckpt_path)) {
+      qs2::qs_save(
+        fit_chunk$fit, ckpt_path,
+        nthreads = min(parallel::detectCores(), 4L)
+      )
+    }
+
+    prev_model <- fit_chunk$fit
+  }
+
+  structure(
+    list(
+      fit                = prev_model,
+      approach           = approach,
+      series_id_levels   = colnames(obs),
+      feature_importance = NULL,
+      ncol_hat           = ncol_hat,
+      best_iter_history  = best_iter_history,
+      batch_indices      = batch_indices
+    ),
+    class = "rml_g_fit"
+  )
+}
+
 #' Cross-sectional reconciliation with a global ML model
 #'
 #' Normalizes `hat` (optionally), fits a single global ML model across all
@@ -384,6 +613,10 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     params = NULL, seed = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
+                    batch_size = NULL,
+                    chunk_strategy = c("sequential", "random"),
+                    batch_checkpoint_dir = NULL,
+                    nrounds_per_batch = 50L,
                     ...) {
   normalize <- match.arg(normalize)
   hat_norm <- hat
@@ -393,10 +626,21 @@ csrml_g <- function(base, hat, obs, agg_mat,
     hat_norm    <- nr$X_norm
     norm_params <- nr
   }
-  fit_obj <- rml_g(approach = approach, hat = hat_norm, obs = obs,
-                   params = params, seed = seed,
-                   early_stopping_rounds = early_stopping_rounds,
-                   validation_split = validation_split, ...)
+  fit_obj <- if (!is.null(batch_size)) {
+    .run_chunked_rml_g(approach = approach, hat = hat_norm, obs = obs,
+                       params = params, seed = seed,
+                       early_stopping_rounds = early_stopping_rounds,
+                       validation_split = validation_split,
+                       batch_size = batch_size,
+                       chunk_strategy = chunk_strategy,
+                       batch_checkpoint_dir = batch_checkpoint_dir,
+                       nrounds_per_batch = nrounds_per_batch, ...)
+  } else {
+    rml_g(approach = approach, hat = hat_norm, obs = obs,
+          params = params, seed = seed,
+          early_stopping_rounds = early_stopping_rounds,
+          validation_split = validation_split, ...)
+  }
   fit_obj$agg_mat     <- agg_mat
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "cs"
@@ -439,6 +683,10 @@ terml_g <- function(base, hat, obs, agg_order,
                     params = NULL, seed = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
+                    batch_size = NULL,
+                    chunk_strategy = c("sequential", "random"),
+                    batch_checkpoint_dir = NULL,
+                    nrounds_per_batch = 50L,
                     ...) {
   normalize <- match.arg(normalize)
   hat_norm <- hat
@@ -448,10 +696,21 @@ terml_g <- function(base, hat, obs, agg_order,
     hat_norm    <- nr$X_norm
     norm_params <- nr
   }
-  fit_obj <- rml_g(approach = approach, hat = hat_norm, obs = obs,
-                   params = params, seed = seed,
-                   early_stopping_rounds = early_stopping_rounds,
-                   validation_split = validation_split, ...)
+  fit_obj <- if (!is.null(batch_size)) {
+    .run_chunked_rml_g(approach = approach, hat = hat_norm, obs = obs,
+                       params = params, seed = seed,
+                       early_stopping_rounds = early_stopping_rounds,
+                       validation_split = validation_split,
+                       batch_size = batch_size,
+                       chunk_strategy = chunk_strategy,
+                       batch_checkpoint_dir = batch_checkpoint_dir,
+                       nrounds_per_batch = nrounds_per_batch, ...)
+  } else {
+    rml_g(approach = approach, hat = hat_norm, obs = obs,
+          params = params, seed = seed,
+          early_stopping_rounds = early_stopping_rounds,
+          validation_split = validation_split, ...)
+  }
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "te"
@@ -494,6 +753,10 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     params = NULL, seed = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
+                    batch_size = NULL,
+                    chunk_strategy = c("sequential", "random"),
+                    batch_checkpoint_dir = NULL,
+                    nrounds_per_batch = 50L,
                     ...) {
   normalize <- match.arg(normalize)
   hat_norm <- hat
@@ -503,10 +766,21 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
     hat_norm    <- nr$X_norm
     norm_params <- nr
   }
-  fit_obj <- rml_g(approach = approach, hat = hat_norm, obs = obs,
-                   params = params, seed = seed,
-                   early_stopping_rounds = early_stopping_rounds,
-                   validation_split = validation_split, ...)
+  fit_obj <- if (!is.null(batch_size)) {
+    .run_chunked_rml_g(approach = approach, hat = hat_norm, obs = obs,
+                       params = params, seed = seed,
+                       early_stopping_rounds = early_stopping_rounds,
+                       validation_split = validation_split,
+                       batch_size = batch_size,
+                       chunk_strategy = chunk_strategy,
+                       batch_checkpoint_dir = batch_checkpoint_dir,
+                       nrounds_per_batch = nrounds_per_batch, ...)
+  } else {
+    rml_g(approach = approach, hat = hat_norm, obs = obs,
+          params = params, seed = seed,
+          early_stopping_rounds = early_stopping_rounds,
+          validation_split = validation_split, ...)
+  }
   fit_obj$agg_mat     <- agg_mat
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
