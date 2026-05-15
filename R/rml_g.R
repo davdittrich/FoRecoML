@@ -348,6 +348,172 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
   )
 }
 
+#' Cross-sectional reconciliation with a global ML model
+#'
+#' Normalizes `hat` (optionally), fits a single global ML model across all
+#' bottom-series via [rml_g], stores reconciliation metadata on the returned
+#' `rml_g_fit` object, and returns it. Reconciled forecasts are produced by
+#' calling [predict.rml_g_fit] (T7.5) on the returned object.
+#'
+#' @param base base forecasts matrix (`n x h`); rows = all series (upper +
+#'   bottom), columns = forecast horizons. Required for API consistency with
+#'   the series-level wrappers; not used for fitting.
+#' @param hat numeric feature matrix (`T_obs x ncol_hat`), shared across series.
+#' @param obs numeric observation matrix (`T_obs x p`), one column per
+#'   bottom-level series.
+#' @param agg_mat cross-sectional aggregation matrix (`n_agg x p`).
+#' @param approach character; ML backend. One of `"lightgbm"`, `"xgboost"`,
+#'   `"ranger"`, `"mlr3"`, `"catboost"`.
+#' @param normalize pre-normalization applied to `hat` before fitting:
+#'   `"none"` (default), `"zscore"`, or `"robust"`.
+#' @param scale_fn scale estimator for `normalize = "robust"`. See
+#'   [normalize_stack].
+#' @param params named list of backend hyperparameters.
+#' @param seed integer for reproducibility.
+#' @param early_stopping_rounds integer; `0` disables early stopping.
+#' @param validation_split fraction of stacked rows reserved for validation
+#'   (`0` disables).
+#' @param ... passed to [rml_g].
+#' @return `rml_g_fit` object with additional fields `agg_mat`, `norm_params`,
+#'   and `framework = "cs"`.
+#' @export
+csrml_g <- function(base, hat, obs, agg_mat,
+                    approach = "lightgbm",
+                    normalize = c("none", "zscore", "robust"),
+                    scale_fn = "gmd",
+                    params = NULL, seed = NULL,
+                    early_stopping_rounds = 0L,
+                    validation_split = 0,
+                    ...) {
+  normalize <- match.arg(normalize)
+  hat_norm <- hat
+  norm_params <- NULL
+  if (normalize != "none") {
+    nr <- normalize_stack(hat, method = normalize, scale_fn = scale_fn)
+    hat_norm    <- nr$X_norm
+    norm_params <- nr
+  }
+  fit_obj <- rml_g(approach = approach, hat = hat_norm, obs = obs,
+                   params = params, seed = seed,
+                   early_stopping_rounds = early_stopping_rounds,
+                   validation_split = validation_split, ...)
+  fit_obj$agg_mat     <- agg_mat
+  fit_obj$norm_params <- norm_params
+  fit_obj$framework   <- "cs"
+  fit_obj
+}
+
+#' Temporal reconciliation with a global ML model
+#'
+#' Normalizes `hat` (optionally), fits a single global ML model across all
+#' temporal aggregation levels via [rml_g], stores reconciliation metadata on
+#' the returned `rml_g_fit` object, and returns it. Reconciled forecasts are
+#' produced by calling [predict.rml_g_fit] (T7.5) on the returned object.
+#'
+#' @param base base forecasts matrix (`n x h`); rows = all temporal levels,
+#'   columns = forecast horizons. Required for API consistency; not used for
+#'   fitting.
+#' @param hat numeric feature matrix (`T_obs x ncol_hat`), shared across series.
+#' @param obs numeric observation matrix (`T_obs x p`).
+#' @param agg_order integer vector of temporal aggregation orders (e.g.
+#'   `c(4L, 2L, 1L)` for annual, semi-annual, quarterly data).
+#' @param approach character; ML backend. One of `"lightgbm"`, `"xgboost"`,
+#'   `"ranger"`, `"mlr3"`, `"catboost"`.
+#' @param normalize pre-normalization applied to `hat` before fitting:
+#'   `"none"` (default), `"zscore"`, or `"robust"`.
+#' @param scale_fn scale estimator for `normalize = "robust"`. See
+#'   [normalize_stack].
+#' @param params named list of backend hyperparameters.
+#' @param seed integer for reproducibility.
+#' @param early_stopping_rounds integer; `0` disables early stopping.
+#' @param validation_split fraction of stacked rows reserved for validation
+#'   (`0` disables).
+#' @param ... passed to [rml_g].
+#' @return `rml_g_fit` object with additional fields `agg_order`, `norm_params`,
+#'   and `framework = "te"`.
+#' @export
+terml_g <- function(base, hat, obs, agg_order,
+                    approach = "lightgbm",
+                    normalize = c("none", "zscore", "robust"),
+                    scale_fn = "gmd",
+                    params = NULL, seed = NULL,
+                    early_stopping_rounds = 0L,
+                    validation_split = 0,
+                    ...) {
+  normalize <- match.arg(normalize)
+  hat_norm <- hat
+  norm_params <- NULL
+  if (normalize != "none") {
+    nr <- normalize_stack(hat, method = normalize, scale_fn = scale_fn)
+    hat_norm    <- nr$X_norm
+    norm_params <- nr
+  }
+  fit_obj <- rml_g(approach = approach, hat = hat_norm, obs = obs,
+                   params = params, seed = seed,
+                   early_stopping_rounds = early_stopping_rounds,
+                   validation_split = validation_split, ...)
+  fit_obj$agg_order   <- agg_order
+  fit_obj$norm_params <- norm_params
+  fit_obj$framework   <- "te"
+  fit_obj
+}
+
+#' Cross-temporal reconciliation with a global ML model
+#'
+#' Normalizes `hat` (optionally), fits a single global ML model across all
+#' cross-temporal series via [rml_g], stores reconciliation metadata on the
+#' returned `rml_g_fit` object, and returns it. Reconciled forecasts are
+#' produced by calling [predict.rml_g_fit] (T7.5) on the returned object.
+#'
+#' @param base base forecasts matrix (`n x h`); rows = all series/levels,
+#'   columns = forecast horizons. Required for API consistency; not used for
+#'   fitting.
+#' @param hat numeric feature matrix (`T_obs x ncol_hat`), shared across series.
+#' @param obs numeric observation matrix (`T_obs x p`).
+#' @param agg_mat cross-sectional aggregation matrix (`n_agg x p`).
+#' @param agg_order integer vector of temporal aggregation orders.
+#' @param approach character; ML backend. One of `"lightgbm"`, `"xgboost"`,
+#'   `"ranger"`, `"mlr3"`, `"catboost"`.
+#' @param normalize pre-normalization applied to `hat` before fitting:
+#'   `"none"` (default), `"zscore"`, or `"robust"`.
+#' @param scale_fn scale estimator for `normalize = "robust"`. See
+#'   [normalize_stack].
+#' @param params named list of backend hyperparameters.
+#' @param seed integer for reproducibility.
+#' @param early_stopping_rounds integer; `0` disables early stopping.
+#' @param validation_split fraction of stacked rows reserved for validation
+#'   (`0` disables).
+#' @param ... passed to [rml_g].
+#' @return `rml_g_fit` object with additional fields `agg_mat`, `agg_order`,
+#'   `norm_params`, and `framework = "ct"`.
+#' @export
+ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
+                    approach = "lightgbm",
+                    normalize = c("none", "zscore", "robust"),
+                    scale_fn = "gmd",
+                    params = NULL, seed = NULL,
+                    early_stopping_rounds = 0L,
+                    validation_split = 0,
+                    ...) {
+  normalize <- match.arg(normalize)
+  hat_norm <- hat
+  norm_params <- NULL
+  if (normalize != "none") {
+    nr <- normalize_stack(hat, method = normalize, scale_fn = scale_fn)
+    hat_norm    <- nr$X_norm
+    norm_params <- nr
+  }
+  fit_obj <- rml_g(approach = approach, hat = hat_norm, obs = obs,
+                   params = params, seed = seed,
+                   early_stopping_rounds = early_stopping_rounds,
+                   validation_split = validation_split, ...)
+  fit_obj$agg_mat     <- agg_mat
+  fit_obj$agg_order   <- agg_order
+  fit_obj$norm_params <- norm_params
+  fit_obj$framework   <- "ct"
+  fit_obj
+}
+
 #' @export
 #' @method rml_g catboost
 rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,

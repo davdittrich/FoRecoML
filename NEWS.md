@@ -2,6 +2,11 @@
 
 ## New features
 
+* New `csrml_g()`, `terml_g()`, `ctrml_g()` wrappers for global ML
+  reconciliation. Return `rml_g_fit` objects; use `predict.rml_g_fit()` for
+  reconciled forecasts. Supports `normalize = c("none","zscore","robust")`
+  pre-normalization of the shared feature matrix before fitting.
+
 * New `normalize_stack()` function for pre-normalizing stacked feature matrices
   before global ML training. Supports zscore and robust normalization with 6
   scale estimators: gmd, mad_scaled, qn (robscale), sn (robscale), iqr_scaled, sd_c4.
