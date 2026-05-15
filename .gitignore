@@ -21,3 +21,17 @@ CRAN-SUBMISSION
 AGENTS.md
 CLAUDE.md
 .claude/
+
+# Test artifacts
+tests/testthat/testthat-problems.rds
+tests/testthat/_problems/
+
+# AI tooling configs
+.metaswarm/
+.serena/
+.lean-ctx/
+
+# Local debug
+fix_infographics.py
+test_output.txt
+..Rcheck/
