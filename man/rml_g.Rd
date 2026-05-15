@@ -46,3 +46,18 @@ categorical feature, fits one model across all series, and returns an
 \code{rml_g_fit} object. Per-series predictions are produced by the
 (forthcoming) \code{predict.rml_g_fit} method (T7.5).
 }
+\examples{
+\dontrun{
+agg_mat <- t(c(1, 1))
+dimnames(agg_mat) <- list("A", c("B", "C"))
+N_hat <- 50
+ts_mean <- c(20, 10, 10)
+hat <- matrix(rnorm(length(ts_mean) * N_hat, mean = ts_mean),
+              N_hat, byrow = TRUE)
+colnames(hat) <- unlist(dimnames(agg_mat))
+obs <- matrix(rnorm(length(ts_mean[-1]) * N_hat, mean = ts_mean[-1]),
+              N_hat, byrow = TRUE)
+colnames(obs) <- colnames(agg_mat)
+fit <- rml_g(approach = "ranger", hat = hat, obs = obs, seed = 42L)
+}
+}

@@ -110,6 +110,20 @@
 #' @param ... passed to backend.
 #' @return list of class `rml_g_fit` with elements `fit`, `approach`,
 #'   `series_id_levels`, `feature_importance`, `ncol_hat`.
+#' @examples
+#' \dontrun{
+#' agg_mat <- t(c(1, 1))
+#' dimnames(agg_mat) <- list("A", c("B", "C"))
+#' N_hat <- 50
+#' ts_mean <- c(20, 10, 10)
+#' hat <- matrix(rnorm(length(ts_mean) * N_hat, mean = ts_mean),
+#'               N_hat, byrow = TRUE)
+#' colnames(hat) <- unlist(dimnames(agg_mat))
+#' obs <- matrix(rnorm(length(ts_mean[-1]) * N_hat, mean = ts_mean[-1]),
+#'               N_hat, byrow = TRUE)
+#' colnames(obs) <- colnames(agg_mat)
+#' fit <- rml_g(approach = "ranger", hat = hat, obs = obs, seed = 42L)
+#' }
 #' @export
 rml_g <- function(approach, hat, obs, params = NULL, seed = NULL,
                   early_stopping_rounds = 0L,
@@ -602,9 +616,36 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
+#' @param batch_size integer or `"auto"`. When non-`NULL`, series are chunked
+#'   into batches of this size and the model is updated incrementally (warm
+#'   start). `"auto"` uses a memory-based heuristic. Not supported for
+#'   catboost.
+#' @param chunk_strategy `"sequential"` (default) or `"random"`. Controls how
+#'   series are assigned to batches.
+#' @param batch_checkpoint_dir character path for saving intermediate batch
+#'   model checkpoints. `NULL` disables batch checkpointing.
+#' @param nrounds_per_batch integer; additional boosting rounds added per batch
+#'   when using incremental training. Default 50.
 #' @param ... passed to [rml_g].
 #' @return `rml_g_fit` object with additional fields `agg_mat`, `norm_params`,
 #'   and `framework = "cs"`.
+#' @examples
+#' \dontrun{
+#' agg_mat <- t(c(1, 1))
+#' dimnames(agg_mat) <- list("A", c("B", "C"))
+#' N_hat <- 50; h <- 2
+#' ts_mean <- c(20, 10, 10)
+#' hat <- matrix(rnorm(length(ts_mean) * N_hat, mean = ts_mean),
+#'               N_hat, byrow = TRUE)
+#' colnames(hat) <- unlist(dimnames(agg_mat))
+#' obs <- matrix(rnorm(length(ts_mean[-1]) * N_hat, mean = ts_mean[-1]),
+#'               N_hat, byrow = TRUE)
+#' colnames(obs) <- colnames(agg_mat)
+#' base <- matrix(rnorm(length(ts_mean) * h, mean = ts_mean), h, byrow = TRUE)
+#' colnames(base) <- unlist(dimnames(agg_mat))
+#' fit <- csrml_g(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
+#'                approach = "lightgbm", seed = 42L)
+#' }
 #' @export
 csrml_g <- function(base, hat, obs, agg_mat,
                     approach = "lightgbm",
@@ -672,9 +713,27 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
+#' @param batch_size integer or `"auto"`. When non-`NULL`, temporal levels are
+#'   chunked into batches for incremental training. `"auto"` uses a
+#'   memory-based heuristic. Not supported for catboost.
+#' @param chunk_strategy `"sequential"` (default) or `"random"`.
+#' @param batch_checkpoint_dir character path for batch model checkpoints.
+#'   `NULL` disables.
+#' @param nrounds_per_batch integer; boosting rounds added per batch. Default 50.
 #' @param ... passed to [rml_g].
 #' @return `rml_g_fit` object with additional fields `agg_order`, `norm_params`,
 #'   and `framework = "te"`.
+#' @examples
+#' \dontrun{
+#' agg_order <- c(4L, 2L, 1L)  # annual, semi-annual, quarterly
+#' n_levels <- sum(agg_order)
+#' N_hat <- 40; h <- 1
+#' hat <- matrix(rnorm(n_levels * N_hat), N_hat, n_levels)
+#' obs <- matrix(rnorm(N_hat), N_hat, 1L)  # one bottom-level series
+#' base <- matrix(rnorm(n_levels * h), h, n_levels)
+#' fit <- terml_g(base = base, hat = hat, obs = obs,
+#'                agg_order = agg_order, approach = "lightgbm", seed = 1L)
+#' }
 #' @export
 terml_g <- function(base, hat, obs, agg_order,
                     approach = "lightgbm",
@@ -742,9 +801,33 @@ terml_g <- function(base, hat, obs, agg_order,
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
+#' @param batch_size integer or `"auto"`. When non-`NULL`, series are chunked
+#'   for incremental training. `"auto"` uses a memory-based heuristic. Not
+#'   supported for catboost.
+#' @param chunk_strategy `"sequential"` (default) or `"random"`.
+#' @param batch_checkpoint_dir character path for batch model checkpoints.
+#'   `NULL` disables.
+#' @param nrounds_per_batch integer; boosting rounds added per batch. Default 50.
 #' @param ... passed to [rml_g].
 #' @return `rml_g_fit` object with additional fields `agg_mat`, `agg_order`,
 #'   `norm_params`, and `framework = "ct"`.
+#' @examples
+#' \dontrun{
+#' agg_mat <- t(c(1, 1))
+#' dimnames(agg_mat) <- list("A", c("B", "C"))
+#' agg_order <- c(4L, 1L)
+#' p <- NCOL(agg_mat)
+#' n_cs <- nrow(agg_mat) + p
+#' n_te <- sum(agg_order)
+#' N_hat <- 40; h <- 1
+#' hat <- matrix(rnorm(n_te * N_hat), N_hat, n_te)
+#' obs <- matrix(rnorm(p * N_hat), N_hat, p)
+#' colnames(obs) <- colnames(agg_mat)
+#' base <- matrix(rnorm(n_cs * n_te * h), h, n_cs * n_te)
+#' fit <- ctrml_g(base = base, hat = hat, obs = obs,
+#'                agg_mat = agg_mat, agg_order = agg_order,
+#'                approach = "lightgbm", seed = 1L)
+#' }
 #' @export
 ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     approach = "lightgbm",

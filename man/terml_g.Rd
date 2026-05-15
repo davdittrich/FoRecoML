@@ -53,6 +53,17 @@ fitting.}
 \item{validation_split}{fraction of stacked rows reserved for validation
 (\code{0} disables).}
 
+\item{batch_size}{integer or \code{"auto"}. When non-\code{NULL}, temporal levels are
+chunked into batches for incremental training. \code{"auto"} uses a
+memory-based heuristic. Not supported for catboost.}
+
+\item{chunk_strategy}{\code{"sequential"} (default) or \code{"random"}.}
+
+\item{batch_checkpoint_dir}{character path for batch model checkpoints.
+\code{NULL} disables.}
+
+\item{nrounds_per_batch}{integer; boosting rounds added per batch. Default 50.}
+
 \item{...}{passed to \link{rml_g}.}
 }
 \value{
@@ -64,4 +75,16 @@ Normalizes \code{hat} (optionally), fits a single global ML model across all
 temporal aggregation levels via \link{rml_g}, stores reconciliation metadata on
 the returned \code{rml_g_fit} object, and returns it. Reconciled forecasts are
 produced by calling \link{predict.rml_g_fit} (T7.5) on the returned object.
+}
+\examples{
+\dontrun{
+agg_order <- c(4L, 2L, 1L)  # annual, semi-annual, quarterly
+n_levels <- sum(agg_order)
+N_hat <- 40; h <- 1
+hat <- matrix(rnorm(n_levels * N_hat), N_hat, n_levels)
+obs <- matrix(rnorm(N_hat), N_hat, 1L)  # one bottom-level series
+base <- matrix(rnorm(n_levels * h), h, n_levels)
+fit <- terml_g(base = base, hat = hat, obs = obs,
+               agg_order = agg_order, approach = "lightgbm", seed = 1L)
+}
 }

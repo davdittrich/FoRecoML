@@ -450,6 +450,13 @@ na_col_mask <- function(hat, threshold = 0.75) {
 #'   \item{X_norm}{normalized matrix, same dims as X}
 #'   \item{center}{numeric vector, per-column center (mean or median)}
 #'   \item{scale}{numeric vector, per-column scale; 1 where scale < .Machine$double.eps}
+#' @examples
+#' X <- matrix(rnorm(60), nrow = 20, ncol = 3)
+#' result <- normalize_stack(X, method = "zscore")
+#' stopifnot(ncol(result$X_norm) == 3L)
+#'
+#' # Robust normalization with Gini Mean Difference scale
+#' result_r <- normalize_stack(X, method = "robust", scale_fn = "gmd")
 #' @export
 normalize_stack <- function(X, method = c("zscore", "robust"), scale_fn = "gmd") {
   method <- match.arg(method)

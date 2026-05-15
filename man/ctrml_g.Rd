@@ -55,6 +55,17 @@ fitting.}
 \item{validation_split}{fraction of stacked rows reserved for validation
 (\code{0} disables).}
 
+\item{batch_size}{integer or \code{"auto"}. When non-\code{NULL}, series are chunked
+for incremental training. \code{"auto"} uses a memory-based heuristic. Not
+supported for catboost.}
+
+\item{chunk_strategy}{\code{"sequential"} (default) or \code{"random"}.}
+
+\item{batch_checkpoint_dir}{character path for batch model checkpoints.
+\code{NULL} disables.}
+
+\item{nrounds_per_batch}{integer; boosting rounds added per batch. Default 50.}
+
 \item{...}{passed to \link{rml_g}.}
 }
 \value{
@@ -66,4 +77,22 @@ Normalizes \code{hat} (optionally), fits a single global ML model across all
 cross-temporal series via \link{rml_g}, stores reconciliation metadata on the
 returned \code{rml_g_fit} object, and returns it. Reconciled forecasts are
 produced by calling \link{predict.rml_g_fit} (T7.5) on the returned object.
+}
+\examples{
+\dontrun{
+agg_mat <- t(c(1, 1))
+dimnames(agg_mat) <- list("A", c("B", "C"))
+agg_order <- c(4L, 1L)
+p <- NCOL(agg_mat)
+n_cs <- nrow(agg_mat) + p
+n_te <- sum(agg_order)
+N_hat <- 40; h <- 1
+hat <- matrix(rnorm(n_te * N_hat), N_hat, n_te)
+obs <- matrix(rnorm(p * N_hat), N_hat, p)
+colnames(obs) <- colnames(agg_mat)
+base <- matrix(rnorm(n_cs * n_te * h), h, n_cs * n_te)
+fit <- ctrml_g(base = base, hat = hat, obs = obs,
+               agg_mat = agg_mat, agg_order = agg_order,
+               approach = "lightgbm", seed = 1L)
+}
 }

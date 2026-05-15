@@ -1,4 +1,3 @@
-
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 # FoRecoML <img src="man/figures/logo.svg" alt="logo" align="right" width="150" style="border: none; float: right;"/>
@@ -13,7 +12,7 @@ GPL-3](https://img.shields.io/badge/license-GPL--3-forestgreen.svg)](https://cra
 
 **Fo**recast **Reco**nciliation is a post-forecasting process designed
 to improve accuracy and align forecasts within systems of linearly
-constrained time series (e.g. hierarchical or grouped). The **FoRecoML**
+constrained time series (e.g. hierarchical or grouped). The **FoRecoML**
 package provides nonlinear forecast reconciliation procedures using
 **M**achine **L**earning in cross-sectional, temporal, and
 cross-temporal settings. `FoRecoML` inherits time series processing
@@ -21,39 +20,74 @@ functionalities from [`FoReco`](https://danigiro.github.io/FoReco/).
 
 The core functions for reconciliation are:
 
-- `csrml()` Cross-sectional Reconciliation with Machine Learning
+- `csrml()` — Cross-sectional Reconciliation with Machine Learning
+  (per-series)
+- `terml()` — Temporal Reconciliation with Machine Learning (per-series)
+- `ctrml()` — Cross-temporal Reconciliation with Machine Learning
+  (per-series)
+- `csrml_g()` / `terml_g()` / `ctrml_g()` — Global ML variants: one
+  model across all series
+- `extract_reconciled_ml()` — Extract the fitted ML model for reuse on
+  new data
+- `normalize_stack()` — Pre-normalize stacked feature matrices for
+  global ML training
 
-- `terml()` Temporal Reconciliation with Machine Learning
-
-- `ctrml()` Cross-temporal Reconciliation with Machine Learning
-
-- `extract_reconciled_ml()` Extraction of the fitted machine learning
-  model used for forecast reconciliation from the output of one of the
-  reconciliation function. The fitted machine learning model can be
-  reused for different sets of data with the same hierarchical
-  structure.
-
-Machine learning models that can be used with `FoRecoML` include random
-forest (`randomForest`), extreme gradient boosting (`xgboost`), light
-gradient boosting machine (`lightgbm`), and models supported by the
-`mlr3` package.
+Machine learning backends supported: `ranger` (default),
+`randomForest` (soft-deprecated), `xgboost`, `lightgbm`, `mlr3`, and
+`catboost`.
 
 ## Installation
 
-You can install the **stable** version on
-[CRAN](https://CRAN.R-project.org/package=FoRecoML)
-
 ``` r
-install.packages("FoRecoML")
-```
-
-You can install the **development** version of `FoRecoML` from
-[GitHub](https://github.com/danigiro/FoRecoML)
-
-``` r
-# install.packages("devtools")
+# Install from GitHub
+pak::pak("danigiro/FoRecoML")
+# Or with devtools
 devtools::install_github("danigiro/FoRecoML")
+
+# Required: FoReco
+install.packages("FoReco")
+
+# Optional ML backends (install as needed)
+install.packages(c("ranger", "lightgbm", "xgboost", "mlr3", "mlr3learners"))
+# catboost: not on CRAN — see https://catboost.ai/en/docs/installation/r-package-install
 ```
+
+## Quick Start
+
+``` r
+library(FoRecoML)
+
+# Cross-sectional reconciliation with ranger (default since v2.0)
+result <- csrml(
+  base    = my_base_forecasts,    # (n_agg + p) x h matrix
+  hat     = my_features,          # T_obs x ncol_hat matrix
+  obs     = my_observations,      # T_obs x p matrix
+  agg_mat = my_aggregation_matrix # n_agg x p matrix
+)
+result  # reconciled forecast matrix
+
+# Global ML (one model for all series) with lightgbm
+result_g <- csrml_g(
+  base    = my_base_forecasts,
+  hat     = my_features,
+  obs     = my_observations,
+  agg_mat = my_aggregation_matrix,
+  approach = "lightgbm"
+)
+```
+
+## Migration from v1.x
+
+The default ML backend changed from `randomForest` to `ranger` in v2.0.
+To keep the old behaviour:
+
+``` r
+result <- csrml(base, hat, obs, agg_mat, approach = "randomForest")
+# ^ emits a soft deprecation warning; will be removed in a future major version
+```
+
+See `vignette("forecoml")` for a full migration guide and examples of
+global ML, normalization, and chunked incremental training.
 
 ## Code of Conduct
 

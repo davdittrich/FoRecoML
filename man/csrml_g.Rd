@@ -53,6 +53,20 @@ bottom-level series.}
 \item{validation_split}{fraction of stacked rows reserved for validation
 (\code{0} disables).}
 
+\item{batch_size}{integer or \code{"auto"}. When non-\code{NULL}, series are chunked
+into batches of this size and the model is updated incrementally (warm
+start). \code{"auto"} uses a memory-based heuristic. Not supported for
+catboost.}
+
+\item{chunk_strategy}{\code{"sequential"} (default) or \code{"random"}. Controls how
+series are assigned to batches.}
+
+\item{batch_checkpoint_dir}{character path for saving intermediate batch
+model checkpoints. \code{NULL} disables batch checkpointing.}
+
+\item{nrounds_per_batch}{integer; additional boosting rounds added per batch
+when using incremental training. Default 50.}
+
 \item{...}{passed to \link{rml_g}.}
 }
 \value{
@@ -64,4 +78,22 @@ Normalizes \code{hat} (optionally), fits a single global ML model across all
 bottom-series via \link{rml_g}, stores reconciliation metadata on the returned
 \code{rml_g_fit} object, and returns it. Reconciled forecasts are produced by
 calling \link{predict.rml_g_fit} (T7.5) on the returned object.
+}
+\examples{
+\dontrun{
+agg_mat <- t(c(1, 1))
+dimnames(agg_mat) <- list("A", c("B", "C"))
+N_hat <- 50; h <- 2
+ts_mean <- c(20, 10, 10)
+hat <- matrix(rnorm(length(ts_mean) * N_hat, mean = ts_mean),
+              N_hat, byrow = TRUE)
+colnames(hat) <- unlist(dimnames(agg_mat))
+obs <- matrix(rnorm(length(ts_mean[-1]) * N_hat, mean = ts_mean[-1]),
+              N_hat, byrow = TRUE)
+colnames(obs) <- colnames(agg_mat)
+base <- matrix(rnorm(length(ts_mean) * h, mean = ts_mean), h, byrow = TRUE)
+colnames(base) <- unlist(dimnames(agg_mat))
+fit <- csrml_g(base = base, hat = hat, obs = obs, agg_mat = agg_mat,
+               approach = "lightgbm", seed = 42L)
+}
 }

@@ -23,3 +23,11 @@ list with components:
 \description{
 Normalize a stacked feature matrix
 }
+\examples{
+X <- matrix(rnorm(60), nrow = 20, ncol = 3)
+result <- normalize_stack(X, method = "zscore")
+stopifnot(ncol(result$X_norm) == 3L)
+
+# Robust normalization with Gini Mean Difference scale
+result_r <- normalize_stack(X, method = "robust", scale_fn = "gmd")
+}

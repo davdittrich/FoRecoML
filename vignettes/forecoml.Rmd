@@ -1,0 +1,126 @@
+---
+title: "FoRecoML: Nonlinear Forecast Reconciliation with Machine Learning"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{FoRecoML}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>", eval = FALSE
+)
+```
+
+## Introduction
+
+FoRecoML extends FoReco with machine learning backends for nonlinear forecast reconciliation
+across cross-sectional, temporal, and cross-temporal hierarchies.
+
+## Migration from v1.x to v2.0
+
+### Default backend changed: randomForest → ranger
+
+```{r migration}
+# v1.x — old default
+# result <- csrml(base, hat, obs, agg_mat)  # used randomForest
+
+# v2.0 — ranger is now the default (faster, equivalent accuracy)
+result <- csrml(base, hat, obs, agg_mat)   # uses ranger
+
+# If you need the old default explicitly:
+result_rf <- csrml(base, hat, obs, agg_mat, approach = "randomForest")
+# ^ This emits a soft deprecation warning
+```
+
+## Per-Series vs Global ML
+
+FoRecoML offers two paradigms:
+
+- **Per-series** (`csrml`, `terml`, `ctrml`): one model per bottom-level series.
+  Best when series have heterogeneous dynamics.
+
+- **Global** (`csrml_g`, `terml_g`, `ctrml_g`): one model across all series,
+  using `series_id` as a categorical feature. Best when series share common patterns
+  and `p` is large.
+
+```{r paradigms}
+# Per-series (default paradigm)
+result_ps <- csrml(base, hat, obs, agg_mat, approach = "ranger")
+
+# Global ML with lightgbm
+result_g <- csrml_g(base, hat, obs, agg_mat, approach = "lightgbm")
+```
+
+## Normalization Options (normalize_stack)
+
+Global ML benefits from pre-normalizing the feature matrix:
+
+```{r normalization}
+# zscore normalization (default in _g wrappers when normalize != "none")
+result <- csrml_g(base, hat, obs, agg_mat,
+                  approach = "lightgbm",
+                  normalize = "zscore")
+
+# Robust normalization with Gini Mean Difference scale
+result <- csrml_g(base, hat, obs, agg_mat,
+                  approach = "lightgbm",
+                  normalize = "robust",
+                  scale_fn = "gmd")
+```
+
+Available `scale_fn` options: `"gmd"`, `"mad_scaled"`, `"qn"`, `"sn"`, `"iqr_scaled"`, `"sd_c4"`.
+The `"qn"` and `"sn"` options require the `robscale` package.
+
+**Zero-scale guard**: Constant series (zero variance) get scale = 1 rather than 0, preventing
+division by zero.
+
+## Chunked Incremental Training (batch_size)
+
+For very large hierarchies (large `p`), global models can be trained incrementally:
+
+```{r chunked}
+# Auto batch_size: memory-based heuristic
+result <- csrml_g(base, hat, obs, agg_mat,
+                  approach = "lightgbm",
+                  batch_size = "auto")
+
+# Manual batch_size with sequential chunking
+result <- csrml_g(base, hat, obs, agg_mat,
+                  approach = "lightgbm",
+                  batch_size = 100L,
+                  chunk_strategy = "sequential")
+```
+
+**catboost note**: The catboost R API does not support model continuation (warm-start).
+Chunked incremental training is therefore **not supported** for catboost. Use lightgbm
+or xgboost for incremental training on large hierarchies.
+
+## Reconciliation Math: sel_mat and agg_mat
+
+The `agg_mat` cross-sectional aggregation matrix maps bottom-level series to aggregate series.
+For a hierarchy with 2 aggregate groups and 4 bottom series:
+
+```
+agg_mat = | 1 1 0 0 |   (group 1: S1 + S2)
+          | 0 0 1 1 |   (group 2: S3 + S4)
+```
+
+Post-reconciliation output satisfies: `agg_mat %*% bottom == top` (machine precision).
+
+The internal `sel_mat` (selection matrix) controls which feature columns each series uses.
+
+## Per-Backend Tuning Notes
+
+| Backend | When to use | Categorical series_id |
+|---|---|---|
+| ranger (default) | Fast, robust, low memory | factor encoding |
+| lightgbm | Large hierarchies, incremental training | integer + categorical_feature |
+| xgboost | Incremental training, portable models | integer (numeric) |
+| mlr3 | Flexible learner selection | factor (auto) |
+| catboost | GPU support, categorical data | integer + cat_features |
+
+**Seed reproducibility**: Pass `seed = integer` to any reconciliation function for
+reproducible fits. All backends respect `set.seed(seed)` before training.
+```
