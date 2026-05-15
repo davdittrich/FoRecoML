@@ -437,3 +437,71 @@ new_rml_fit <- function(
 na_col_mask <- function(hat, threshold = 0.75) {
   colSums(is.na(hat)) >= threshold * NROW(hat)
 }
+
+# T7.1 — Global ML stacking normalization helpers -------------------------
+
+#' Normalize a stacked feature matrix
+#'
+#' @param X numeric matrix (rows = observations, cols = features)
+#' @param method normalization method: "zscore" (default) or "robust"
+#' @param scale_fn scale estimator when method="robust". One of
+#'   "gmd", "mad_scaled", "qn", "sn", "iqr_scaled", "sd_c4"
+#' @return list with components:
+#'   \item{X_norm}{normalized matrix, same dims as X}
+#'   \item{center}{numeric vector, per-column center (mean or median)}
+#'   \item{scale}{numeric vector, per-column scale; 1 where scale < .Machine$double.eps}
+#' @export
+normalize_stack <- function(X, method = c("zscore", "robust"), scale_fn = "gmd") {
+  method <- match.arg(method)
+
+  if (method == "zscore") {
+    center <- colMeans(X, na.rm = TRUE)
+    scale  <- apply(X, 2, sd, na.rm = TRUE)
+  } else {
+    # robust method
+    scale_fn <- match.arg(scale_fn, c("gmd", "mad_scaled", "qn", "sn", "iqr_scaled", "sd_c4"))
+    center <- apply(X, 2, median, na.rm = TRUE)
+    scale  <- apply(X, 2, .robscale_fn(scale_fn), na.rm = TRUE)
+  }
+
+  # Zero-scale guard: constant series -> divide by 1 (leave untouched)
+  zero_mask <- scale < .Machine$double.eps
+  scale[zero_mask] <- 1
+
+  X_norm <- sweep(sweep(X, 2, center, "-"), 2, scale, "/")
+  list(X_norm = X_norm, center = center, scale = scale)
+}
+
+# Returns a function that computes the robust scale for a single column vector.
+.robscale_fn <- function(scale_fn) {
+  switch(scale_fn,
+    "gmd" = function(x, na.rm) {
+      # Gini mean difference: mean(|x_i - x_j|) for i < j, scaled for consistency
+      x <- if (na.rm) x[!is.na(x)] else x
+      if (length(x) < 2) return(0)
+      mean(abs(outer(x, x, "-")[upper.tri(matrix(0, length(x), length(x)))]))
+    },
+    "mad_scaled" = function(x, na.rm) {
+      mad(x, na.rm = na.rm)   # mad() already has constant=1.4826
+    },
+    "qn" = function(x, na.rm) {
+      if (!requireNamespace("robscale", quietly = TRUE)) {
+        cli_abort("{.pkg robscale} required for scale_fn='qn'")
+      }
+      robscale::qn(if (na.rm) x[!is.na(x)] else x)
+    },
+    "sn" = function(x, na.rm) {
+      if (!requireNamespace("robscale", quietly = TRUE)) {
+        cli_abort("{.pkg robscale} required for scale_fn='sn'")
+      }
+      robscale::sn(if (na.rm) x[!is.na(x)] else x)
+    },
+    "iqr_scaled" = function(x, na.rm) {
+      IQR(x, na.rm = na.rm) / 1.3490  # consistent with normal
+    },
+    "sd_c4" = function(x, na.rm) {
+      n <- sum(!is.na(x))
+      sd(x, na.rm = na.rm) / (1 - 1 / (4 * n))  # c4 bias correction
+    }
+  )
+}

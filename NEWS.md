@@ -1,5 +1,11 @@
 # FoRecoML 2.0.0
 
+## New features
+
+* New `normalize_stack()` function for pre-normalizing stacked feature matrices
+  before global ML training. Supports zscore and robust normalization with 6
+  scale estimators: gmd, mad_scaled, qn (robscale), sn (robscale), iqr_scaled, sd_c4.
+
 ## Breaking changes
 
 * The default ML backend for `csrml()`, `terml()`, `ctrml()` and their
