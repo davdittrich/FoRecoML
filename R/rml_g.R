@@ -667,6 +667,9 @@ csrml_g <- function(base, hat, obs, agg_mat,
     hat_norm    <- nr$X_norm
     norm_params <- nr
   }
+  if (missing(base)) {
+    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
+  }
   fit_obj <- if (!is.null(batch_size)) {
     .run_chunked_rml_g(approach = approach, hat = hat_norm, obs = obs,
                        params = params, seed = seed,
@@ -685,7 +688,35 @@ csrml_g <- function(base, hat, obs, agg_mat,
   fit_obj$agg_mat     <- agg_mat
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "cs"
-  fit_obj
+
+  # --- prediction + reconciliation pipeline -----------------------------------
+  # Step 1: transpose base to h×n feature space (same layout as hat rows)
+  base_t <- t(base)
+
+  # Step 2: apply stored normalization if used during training
+  base_features <- if (!is.null(fit_obj$norm_params)) {
+    apply_norm_params(base_t, fit_obj$norm_params)
+  } else {
+    base_t
+  }
+
+  # Step 3: predict — series_id=NULL broadcasts over nb bottom series (series-major)
+  # Output: numeric vector length h*nb = [s1_h1..hh, s2_h1..hh, ..., snb_h1..hh]
+  bts_vec <- predict(fit_obj, newdata = base_features)
+
+  # Step 4: reshape to h × nb (column j = series j across all horizons)
+  nb <- length(fit_obj$series_id_levels)
+  bts_mat <- matrix(bts_vec, nrow = nrow(base_t), ncol = nb)
+
+  # Step 5: csbu expects nb × h — transpose then reconcile
+  reco_mat <- FoReco::csbu(t(bts_mat), agg_mat = fit_obj$agg_mat)
+
+  # Step 6: attach fit for downstream extract_reconciled_ml()
+  attr(reco_mat, "FoReco") <- structure(
+    list(fit = fit_obj, framework = "Cross-sectional"),
+    class = "foreco_info"
+  )
+  reco_mat
 }
 
 #' Temporal reconciliation with a global ML model
