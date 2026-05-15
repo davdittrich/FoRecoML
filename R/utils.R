@@ -481,8 +481,10 @@ normalize_stack <- function(X, method = c("zscore", "robust"), scale_fn = "gmd")
 
 apply_norm_params <- function(X_new, norm_params) {
   if (is.null(norm_params)) return(X_new)
+  sc <- norm_params$scale
+  sc[!is.finite(sc) | sc < .Machine$double.eps] <- 1
   X_new <- sweep(X_new, 2, norm_params$center, "-")
-  X_new <- sweep(X_new, 2, norm_params$scale, "/")
+  X_new <- sweep(X_new, 2, sc, "/")
   X_new
 }
 
