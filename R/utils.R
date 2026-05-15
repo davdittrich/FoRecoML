@@ -265,7 +265,7 @@ input2rtw <- function(x, kset) {
   x <- FoReco::FoReco2matrix(x, kset)
   x <- lapply(1:length(kset), function(i) {
     if (NCOL(x[[i]]) > 1) {
-      tmp <- apply(x[[i]], 2, rep, each = kset[i])
+      tmp <- matrix(rep(as.vector(x[[i]]), each = kset[i]), nrow = NROW(x[[i]]) * kset[i], ncol = NCOL(x[[i]]))
       #colnames(tmp) <- paste0(colnames(tmp), "_", kset[i])
     } else {
       tmp <- rep(x[[i]], each = kset[i])
@@ -302,7 +302,7 @@ input2rtw_partial <- function(x, kset, cols) {
     }
     k <- kset[lvl_idx_full]
     expanded <- if (NCOL(block) > 1) {
-      apply(block, 2, rep, each = k)
+      matrix(rep(as.vector(block), each = k), nrow = NROW(block) * k, ncol = NCOL(block))
     } else {
       rep(block, each = k)
     }
@@ -419,9 +419,5 @@ new_rml_fit <- function(
 # Returns logical vector of length NCOL(hat).
 # Uses sum/threshold*NROW form to preserve TRUE-everywhere semantics at NROW=0.
 na_col_mask <- function(hat, threshold = 0.75) {
-  vapply(
-    seq_len(NCOL(hat)),
-    function(j) sum(is.na(hat[, j])) >= threshold * NROW(hat),
-    logical(1)
-  )
+  colSums(is.na(hat)) >= threshold * NROW(hat)
 }
