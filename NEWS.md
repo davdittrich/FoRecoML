@@ -1,3 +1,44 @@
+# FoRecoML 2.0.0
+
+## Breaking changes
+
+* The default ML backend for `csrml()`, `terml()`, `ctrml()` and their
+  `*_fit()` variants changed from `"randomForest"` to `"ranger"`. Update
+  existing scripts that relied on the old default by passing
+  `approach = "randomForest"` explicitly. The randomForest backend now
+  emits a soft deprecation warning (visible via
+  `options(lifecycle_verbosity = "warning")`) and will be removed in a
+  future major version. ranger is faster on the per-series workload and
+  statistically equivalent.
+
+## New features
+
+* New `approach = "ranger"` backend (now the default). Uses the
+  `ranger` package with `num.threads = 1L` (per-series models are too
+  small to benefit from intra-tree threading; the outer rml() loop is
+  the natural parallel boundary).
+* New `predict.rml_fit()` S3 method providing a uniform predict
+  interface that dispatches back to the corresponding framework
+  function (`csrml`, `terml`, or `ctrml`) using the stored fit.
+* `rml()` now respects the `seed` argument: calling `set.seed(seed)`
+  before the per-series training loop. Prior versions accepted `seed`
+  but the actual call to `set.seed()` was commented out, making the
+  argument a silent no-op.
+
+## Performance
+
+* Checkpoint serialization uses `qs2` with adaptive `nthreads` (capped
+  at 4 cores) for faster disk I/O during streaming fit checkpointing.
+* `estimate_peak_bytes()` audited for integer overflow: all
+  multiplicands now cast to double before multiplication, preventing
+  overflow on hierarchies where `NROW(hat) * NCOL(hat) * p` exceeds
+  `.Machine$integer.max`.
+
+## Deprecated
+
+* `approach = "randomForest"` is soft-deprecated; use
+  `approach = "ranger"` instead.
+
 # FoRecoML (development version)
 
 ## New features

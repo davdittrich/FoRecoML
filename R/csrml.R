@@ -14,7 +14,7 @@
 #'
 #' @usage
 #' # Reconciled forecasts
-#' csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
+#' csrml(base, hat, obs, agg_mat, features = "all", approach = "ranger",
 #'       params = NULL, tuning = NULL, sntz = FALSE, round = FALSE,
 #'       fit = NULL, checkpoint = "auto")
 #'
@@ -160,7 +160,7 @@ csrml <- function(
   obs,
   agg_mat,
   features = "all",
-  approach = "randomForest",
+  approach = "ranger",
   params = NULL,
   tuning = NULL,
   sntz = FALSE,
@@ -299,7 +299,7 @@ csrml <- function(
 
 #' @usage
 #' # Pre-trained reconciled ML models
-#' csrml_fit(hat, obs, agg_mat, features = "all", approach = "randomForest",
+#' csrml_fit(hat, obs, agg_mat, features = "all", approach = "ranger",
 #'           params = NULL, tuning = NULL, checkpoint = "auto")
 #'
 #' @return
@@ -314,7 +314,7 @@ csrml_fit <- function(
   obs,
   agg_mat,
   features = "all",
-  approach = "randomForest",
+  approach = "ranger",
   params = NULL,
   tuning = NULL,
   checkpoint = "auto"

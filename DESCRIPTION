@@ -37,8 +37,9 @@ Description: Nonlinear forecast reconciliation with machine learning in
     temporal, and cross-temporal 
     (Rombouts et al. 2024 <doi:10.1016/j.ijforecast.2024.05.008>) frameworks.
 Depends: R (>= 3.4), Matrix, FoReco
-Imports: stats, cli, methods, randomForest, lightgbm, xgboost,
-    mlr3, mlr3tuning, mlr3learners, paradox, qs2
+Imports: stats, cli, methods, ranger (>= 0.14.0), randomForest,
+    lightgbm, xgboost, mlr3, mlr3tuning, mlr3learners, paradox, qs2,
+    lifecycle, parallel
 License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
@@ -46,5 +47,5 @@ RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
 URL: https://github.com/danigiro/FoRecoML, https://danigiro.github.io/FoRecoML/
 BugReports: https://github.com/danigiro/FoRecoML/issues
-Suggests: testthat (>= 3.0.0), ranger
+Suggests: testthat (>= 3.0.0)
 Config/testthat/edition: 3

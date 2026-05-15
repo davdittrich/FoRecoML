@@ -14,7 +14,7 @@
 #' @usage
 #' # Reconciled forecasts
 #' ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
-#'       approach = "randomForest", params = NULL, tuning = NULL,
+#'       approach = "ranger", params = NULL, tuning = NULL,
 #'       sntz = FALSE, round = FALSE, fit = NULL, checkpoint = "auto")
 #'
 #' @param base A (\eqn{n \times h(k^\ast+m)}) numeric matrix containing the base
@@ -244,7 +244,7 @@ ctrml <- function(
   agg_order,
   tew = "sum",
   features = "all",
-  approach = "randomForest",
+  approach = "ranger",
   params = NULL,
   tuning = NULL,
   sntz = FALSE,
@@ -555,7 +555,7 @@ ctrml <- function(
 #' @usage
 #' # Pre-trained reconciled ML models
 #' ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
-#'           approach = "randomForest", params = NULL, tuning = NULL,
+#'           approach = "ranger", params = NULL, tuning = NULL,
 #'           checkpoint = "auto")
 #'
 #' @return
@@ -572,7 +572,7 @@ ctrml_fit <- function(
   agg_order,
   tew = "sum",
   features = "all",
-  approach = "randomForest",
+  approach = "ranger",
   params = NULL,
   tuning = NULL,
   checkpoint = "auto"

@@ -150,16 +150,20 @@ estimate_peak_bytes <- function(hat, approach, p) {
   if (is.null(hat)) {
     return(0)
   }
-  hat_bytes <- as.numeric(NROW(hat)) * NCOL(hat) * 8
+  # T5 overflow audit: cast every multiplicand to double to prevent integer
+  # overflow on large hat dims (NROW*NCOL > .Machine$integer.max occurs at
+  # ~46k x 46k). p is also cast — p can reach 100k+ on dense ct hierarchies.
+  hat_bytes <- as.numeric(NROW(hat)) * as.numeric(NCOL(hat)) * 8
   per_model <- switch(
     approach,
     "randomForest" = 5,
-    "mlr3" = 3,
-    "xgboost" = 0.5,
-    "lightgbm" = 0.3,
+    "ranger"       = 3,
+    "mlr3"         = 3,
+    "xgboost"      = 0.5,
+    "lightgbm"     = 0.3,
     1
   )
-  models <- hat_bytes * per_model * p
+  models <- hat_bytes * per_model * as.numeric(p)
   copies <- hat_bytes * 3
   models + copies
 }
@@ -232,11 +236,16 @@ available_ram_bytes <- function() {
 serialize_fit <- function(model, dir, i, approach) {
   ext <- if (approach == "lightgbm") ".lgb" else ".qs2"
   path <- file.path(dir, sprintf("fit_%d%s", i, ext))
+  # B7: cap qs2 nthreads at min(detectCores(), 4L). Capping at 4 avoids
+  # diminishing returns from contention on small per-series fits while still
+  # giving the parallel compressor enough lanes to saturate disk I/O.
+  nth <- min(parallel::detectCores(logical = TRUE), 4L)
+  if (!is.finite(nth) || nth < 1L) nth <- 1L
   switch(
     approach,
-    "xgboost" = qs2::qs_save(xgboost::xgb.save.raw(model), path),
+    "xgboost" = qs2::qs_save(xgboost::xgb.save.raw(model), path, nthreads = nth),
     "lightgbm" = lightgbm::lgb.save(model, filename = path),
-    qs2::qs_save(model, path)
+    qs2::qs_save(model, path, nthreads = nth)
   )
   path
 }

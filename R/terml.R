@@ -10,7 +10,7 @@
 #' @usage
 #' # Reconciled forecasts
 #' terml(base, hat, obs, agg_order, tew = "sum", features = "all",
-#'       approach = "randomForest", params = NULL, tuning = NULL,
+#'       approach = "ranger", params = NULL, tuning = NULL,
 #'       sntz = FALSE, round = FALSE, fit = NULL, checkpoint = "auto")
 #'
 #' @param base A (\eqn{h(k^\ast + m) \times 1}) numeric vector containing the
@@ -157,7 +157,7 @@ terml <- function(
   agg_order,
   tew = "sum",
   features = "all",
-  approach = "randomForest",
+  approach = "ranger",
   params = NULL,
   tuning = NULL,
   sntz = FALSE,
@@ -415,7 +415,7 @@ terml <- function(
 #' @usage
 #' # Pre-trained reconciled ML models
 #' terml_fit(hat, obs, agg_order, tew = "sum", features = "all",
-#'           approach = "randomForest", params = NULL, tuning = NULL,
+#'           approach = "ranger", params = NULL, tuning = NULL,
 #'           checkpoint = "auto")
 #'
 #' @return
@@ -431,7 +431,7 @@ terml_fit <- function(
   agg_order,
   tew = "sum",
   features = "all",
-  approach = "randomForest",
+  approach = "ranger",
   params = NULL,
   tuning = NULL,
   checkpoint = "auto"

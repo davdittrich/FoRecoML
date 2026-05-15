@@ -40,9 +40,12 @@ rml <- function(
     if (!is.null(dimnames(obs))) dimnames(obs) <- NULL
     p <- NCOL(obs)
 
-    # if (!is.null(seed)) {
-    #   set.seed(seed)
-    # }
+    # T5: set.seed once per rml() call (was a silent no-op prior to 2.0.0).
+    # Placed inside the training branch so predict-reuse calls do not perturb
+    # the user's RNG state.
+    if (!is.null(seed)) {
+      set.seed(seed)
+    }
   } else {
     # sel_mat <- fit$sel_mat
     p <- length(fit$fit)
@@ -263,6 +266,50 @@ rml <- function(
   UseMethod("rml", approach)
 }
 
+#' Predict from a reconciled-ML fit object
+#'
+#' Dispatches back to the framework-specific reconciliation function
+#' ([csrml], [terml], or [ctrml]) using the stored fit so callers
+#' have a single uniform predict interface.
+#'
+#' @param object an object of class \code{rml_fit} returned by
+#'   [csrml_fit], [terml_fit], or [ctrml_fit].
+#' @param newdata base forecasts matrix/vector (the \code{base} argument
+#'   to the corresponding reconciliation function).
+#' @param ... additional arguments forwarded to the framework-specific
+#'   reconciliation call (e.g., \code{sntz}, \code{round}).
+#'
+#' @return The reconciled forecast matrix returned by the corresponding
+#'   framework function.
+#'
+#' @export
+#' @method predict rml_fit
+predict.rml_fit <- function(object, newdata, ...) {
+  if (missing(newdata) || is.null(newdata)) {
+    cli_abort(
+      "{.arg newdata} (base forecasts) is required for {.fn predict.rml_fit}.",
+      call = NULL
+    )
+  }
+  switch(
+    object$framework,
+    "cs" = csrml(base = newdata, fit = object, agg_mat = object$agg_mat, ...),
+    "te" = terml(
+      base = newdata, fit = object,
+      agg_order = object$agg_order, tew = object$tew, ...
+    ),
+    "ct" = ctrml(
+      base = newdata, fit = object,
+      agg_mat = object$agg_mat, agg_order = object$agg_order,
+      tew = object$tew, ...
+    ),
+    cli_abort(
+      "Unknown framework {.val {object$framework}} in {.cls rml_fit}.",
+      call = NULL
+    )
+  )
+}
+
 rml.mlr3 <- function(
   y = NULL,
   X = NULL,
@@ -373,6 +420,15 @@ rml.randomForest <- function(
   ...
 ) {
   if (is.null(fit)) {
+    # T5: soft-deprecate randomForest; ranger is the new default.
+    lifecycle::deprecate_soft(
+      when = "2.0.0",
+      what = I("`approach = \"randomForest\"`"),
+      details = paste0(
+        "Use `approach = \"ranger\"` instead; ranger is faster and ",
+        "statistically equivalent."
+      )
+    )
     if (is.null(y) && is.null(X)) {
       cli_abort(
         c(
@@ -405,6 +461,83 @@ rml.randomForest <- function(
   bts <- NULL
   if (!is.null(Xtest)) {
     bts <- predict(fit, Xtest)
+  }
+
+  if (is.null(bts) && is.null(fit)) {
+    cli_abort(
+      c(
+        "Mandatory arguments:",
+        "1. {.arg y} and {.arg X};",
+        "2. {.arg fit} and {.arg Xtest}."
+      ),
+      call = NULL
+    )
+  }
+  return(
+    list(bts = bts, fit = fit)
+  )
+}
+
+# T5: ranger backend. Mirrors rml.randomForest contract but uses ranger's
+# data.frame interface (no matrix-mode equivalent that handles factor +
+# numeric mixes cleanly). num.threads = 1L: per-series trees are tiny and
+# threading overhead exceeds any benefit at this granularity.
+rml.ranger <- function(
+  y = NULL,
+  X = NULL,
+  Xtest = NULL,
+  fit = NULL,
+  params = NULL,
+  ...
+) {
+  if (is.null(fit)) {
+    if (is.null(y) && is.null(X)) {
+      cli_abort(
+        c(
+          "Mandatory arguments:",
+          "1. {.arg y} and {.arg X};",
+          "2. {.arg fit} and {.arg Xtest}."
+        ),
+        call = NULL
+      )
+    }
+
+    if (!requireNamespace("ranger", quietly = TRUE)) {
+      cli_abort(
+        paste0(
+          "Package {.pkg ranger} is required for {.code approach = \"ranger\"}. ",
+          "Install it via {.code install.packages(\"ranger\")}."
+        ),
+        call = NULL
+      )
+    }
+
+    mtry <- if (is.null(params$mtry)) max(floor(ncol(X) / 3), 1) else params$mtry
+    min.node.size <- if (is.null(params$min.node.size)) 5 else params$min.node.size
+    num.trees <- if (is.null(params$num.trees)) 500 else params$num.trees
+    seed_i <- if (is.null(params$seed)) NULL else params$seed
+
+    # ranger requires a data.frame; column names must be syntactically valid.
+    df <- data.frame(as.matrix(X), check.names = TRUE)
+    df$.y <- y
+
+    fit <- ranger::ranger(
+      formula = .y ~ .,
+      data = df,
+      num.trees = num.trees,
+      mtry = mtry,
+      min.node.size = min.node.size,
+      num.threads = 1L,
+      seed = seed_i,
+      importance = "none",
+      verbose = FALSE
+    )
+  }
+
+  bts <- NULL
+  if (!is.null(Xtest)) {
+    df_test <- data.frame(as.matrix(Xtest), check.names = TRUE)
+    bts <- predict(fit, data = df_test, num.threads = 1L)$predictions
   }
 
   if (is.null(bts) && is.null(fit)) {

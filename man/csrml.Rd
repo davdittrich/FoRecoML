@@ -6,12 +6,12 @@
 \title{Cross-sectional Reconciliation with Machine Learning}
 \usage{
 # Reconciled forecasts
-csrml(base, hat, obs, agg_mat, features = "all", approach = "randomForest",
+csrml(base, hat, obs, agg_mat, features = "all", approach = "ranger",
       params = NULL, tuning = NULL, sntz = FALSE, round = FALSE,
       fit = NULL, checkpoint = "auto")
 
 # Pre-trained reconciled ML models
-csrml_fit(hat, obs, agg_mat, features = "all", approach = "randomForest",
+csrml_fit(hat, obs, agg_mat, features = "all", approach = "ranger",
           params = NULL, tuning = NULL, checkpoint = "auto")
 }
 \arguments{

@@ -7,12 +7,12 @@
 \usage{
 # Reconciled forecasts
 ctrml(base, hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
-      approach = "randomForest", params = NULL, tuning = NULL,
+      approach = "ranger", params = NULL, tuning = NULL,
       sntz = FALSE, round = FALSE, fit = NULL, checkpoint = "auto")
 
 # Pre-trained reconciled ML models
 ctrml_fit(hat, obs, agg_mat, agg_order, tew = "sum", features = "all",
-          approach = "randomForest", params = NULL, tuning = NULL,
+          approach = "ranger", params = NULL, tuning = NULL,
           checkpoint = "auto")
 }
 \arguments{
