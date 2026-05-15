@@ -3,13 +3,24 @@
 ## New features
 
 * New `csrml_g()`, `terml_g()`, `ctrml_g()` wrappers for global ML
-  reconciliation. Return `rml_g_fit` objects; use `predict.rml_g_fit()` for
-  reconciled forecasts. Supports `normalize = c("none","zscore","robust")`
+  reconciliation. `csrml_g()` and `ctrml_g()` return reconciled forecast
+  matrices with `attr(., 'FoReco')`. `terml_g()` returns a named numeric vector
+  matching `FoReco::tebu()` output. Access the underlying fit via
+  `extract_reconciled_ml(result)`. Supports `normalize = c("none","zscore","robust")`
   pre-normalization of the shared feature matrix before fitting.
 
 * New `normalize_stack()` function for pre-normalizing stacked feature matrices
   before global ML training. Supports zscore and robust normalization with 6
   scale estimators: gmd, mad_scaled, qn (robscale), sn (robscale), iqr_scaled, sd_c4.
+
+## Bug fixes
+
+* `csrml_g()`, `terml_g()`, `ctrml_g()` no longer silently ignore the `base`
+  argument. Previously they returned bare `rml_g_fit` objects; now they perform
+  the full fit + predict + reconcile pipeline.
+
+* `sntz`, `round` (all three wrappers) and `tew` (terml_g/ctrml_g) parameters
+  restored for parity with the per-series csrml/terml/ctrml functions.
 
 ## Breaking changes
 
