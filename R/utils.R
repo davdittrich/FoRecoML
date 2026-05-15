@@ -55,6 +55,11 @@
 #'
 #' @export
 extract_reconciled_ml <- function(reco) {
+  foreco_attr <- attr(reco, "FoReco")
+  if (!is.null(foreco_attr) && inherits(foreco_attr$fit, "rml_g_fit")) {
+    return(foreco_attr$fit)
+  }
+
   if (inherits(reco, "rml_fit")) {
     cli_inform(
       "Input {.arg reco} is already an {.cls rml_fit}; returning it unchanged."
