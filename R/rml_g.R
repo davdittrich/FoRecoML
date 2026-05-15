@@ -910,6 +910,9 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
     hat_norm    <- nr$X_norm
     norm_params <- nr
   }
+  if (missing(base)) {
+    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
+  }
   fit_obj <- if (!is.null(batch_size)) {
     .run_chunked_rml_g(approach = approach, hat = hat_norm, obs = obs,
                        params = params, seed = seed,
@@ -929,7 +932,27 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "ct"
-  fit_obj
+
+  # --- prediction + reconciliation pipeline -----------------------------------
+  # base is h×n (horizons × series features), matching hat's column layout — no transpose needed.
+  base_features <- if (!is.null(fit_obj$norm_params)) {
+    apply_norm_params(base, fit_obj$norm_params)
+  } else {
+    base
+  }
+  bts_vec <- predict(fit_obj, newdata = base_features)
+  nb      <- length(fit_obj$series_id_levels)
+  bts_mat <- matrix(bts_vec, nrow = nrow(base), ncol = nb)
+  # ctbu expects nb × hm — transpose then reconcile
+  reco_mat <- FoReco::ctbu(t(bts_mat), agg_mat = fit_obj$agg_mat, agg_order = fit_obj$agg_order)
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit              = fit_obj,
+    framework        = "Cross-temporal",
+    forecast_horizon = nrow(reco_mat),
+    rfun             = "ctrml_g",
+    ml               = approach
+  ))
+  reco_mat
 }
 
 #' @export
