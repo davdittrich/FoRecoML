@@ -247,7 +247,10 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
       feature_importance = feature_importance,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
-      kset               = kset
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -319,7 +322,10 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       feature_importance = feature_importance,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
-      kset               = kset
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -372,7 +378,10 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
       feature_importance = feature_importance,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
-      kset               = kset
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -419,7 +428,10 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       feature_importance = feature_importance,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
-      kset               = kset
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -652,7 +664,10 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       use_level_id       = FALSE,
       kset               = NULL,
       best_iter_history  = best_iter_history,
-      batch_indices      = batch_indices
+      batch_indices      = batch_indices,
+      valid_idx          = integer(0),
+      X_valid            = matrix(numeric(0), nrow = 0L, ncol = ncol_hat),
+      y_valid            = numeric(0)
     ),
     class = "rml_g_fit"
   )
@@ -1148,7 +1163,10 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       feature_importance = feature_importance,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
-      kset               = kset
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
