@@ -165,6 +165,8 @@
 rml_g <- function(approach, hat, obs, params = NULL, seed = NULL,
                   early_stopping_rounds = 0L,
                   validation_split = 0,
+                  level_id = FALSE,
+                  kset = NULL,
                   ...) {
   class(approach) <- c(approach, class(approach))
   UseMethod("rml_g", approach)
@@ -175,8 +177,12 @@ rml_g <- function(approach, hat, obs, params = NULL, seed = NULL,
 rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
                            early_stopping_rounds = 0L,
                            validation_split = 0,
+                           level_id = FALSE,
+                           kset = NULL,
                            ...) {
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -239,7 +245,9 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "lightgbm",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(stack$X_stacked)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset
     ),
     class = "rml_g_fit"
   )
@@ -250,8 +258,12 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
 rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
                           early_stopping_rounds = 0L,
                           validation_split = 0,
+                          level_id = FALSE,
+                          kset = NULL,
                           ...) {
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -305,7 +317,9 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "xgboost",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(stack$X_stacked)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset
     ),
     class = "rml_g_fit"
   )
@@ -316,6 +330,8 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
 rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
                          early_stopping_rounds = 0L,
                          validation_split = 0,
+                         level_id = FALSE,
+                         kset = NULL,
                          ...) {
   if (early_stopping_rounds > 0L) {
     cli_inform(
@@ -325,6 +341,8 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
   }
 
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -352,7 +370,9 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "ranger",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(stack$X_stacked)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset
     ),
     class = "rml_g_fit"
   )
@@ -363,8 +383,12 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
 rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
                        early_stopping_rounds = 0L,
                        validation_split = 0,
+                       level_id = FALSE,
+                       kset = NULL,
                        ...) {
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -393,7 +417,9 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "mlr3",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(stack$X_stacked)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset
     ),
     class = "rml_g_fit"
   )
@@ -484,7 +510,8 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 .run_chunked_rml_g <- function(approach, hat, obs, params, seed,
                                early_stopping_rounds, validation_split,
                                batch_size, chunk_strategy,
-                               batch_checkpoint_dir, nrounds_per_batch, ...) {
+                               batch_checkpoint_dir, nrounds_per_batch,
+                               level_id = FALSE, kset = NULL, ...) {
   p        <- NCOL(obs)
   T_obs    <- NROW(obs)
   ncol_hat <- NCOL(hat)
@@ -513,7 +540,8 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
     return(rml_g(approach = approach, hat = hat, obs = obs,
                  params = params, seed = seed,
                  early_stopping_rounds = early_stopping_rounds,
-                 validation_split = validation_split, ...))
+                 validation_split = validation_split,
+                 level_id = level_id, kset = kset, ...))
   }
 
   chunk_strategy <- match.arg(chunk_strategy, c("sequential", "random"))
@@ -621,6 +649,8 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       series_id_levels   = colnames(obs),
       feature_importance = NULL,
       ncol_hat           = ncol_hat,
+      use_level_id       = FALSE,
+      kset               = NULL,
       best_iter_history  = best_iter_history,
       batch_indices      = batch_indices
     ),
@@ -667,6 +697,8 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 #'   model checkpoints. `NULL` disables batch checkpointing.
 #' @param nrounds_per_batch integer; additional boosting rounds added per batch
 #'   when using incremental training. Default 50.
+#' @param level_id Logical. Must be `FALSE` (the default).
+#'   [csrml_g()] has no temporal axis; passing `TRUE` signals a user error.
 #' @param ... passed to [rml_g].
 #' @return Numeric matrix (n × h) of cross-sectional reconciled forecasts, with
 #'   `attr(., "FoReco")` of class `foreco_info`. Use [extract_reconciled_ml]
@@ -701,8 +733,15 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     chunk_strategy = c("sequential", "random"),
                     batch_checkpoint_dir = NULL,
                     nrounds_per_batch = 50L,
+                    level_id = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
+  if (isTRUE(level_id)) {
+    cli_abort(
+      "{.arg level_id} is not applicable to {.fn csrml_g}; the cross-sectional hierarchy has no temporal axis.",
+      call = NULL
+    )
+  }
   if (missing(base)) {
     cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
   }
@@ -790,6 +829,10 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #' @param batch_checkpoint_dir character path for batch model checkpoints.
 #'   `NULL` disables.
 #' @param nrounds_per_batch integer; boosting rounds added per batch. Default 50.
+#' @param level_id Logical (default `FALSE`). If `TRUE`, appends an ordered-integer
+#'   temporal-aggregation-level feature to the stacked training matrix.
+#'   `level_id = 1` = finest granularity; `level_id = max` = coarsest.
+#'   Requires the level structure to be derivable from `agg_order`.
 #' @param ... passed to [rml_g].
 #' @return Named numeric vector matching `FoReco::tebu()` output (length `h × kt`
 #'   where `kt = sum(max(agg_order)/agg_order)`; names like `"k-<order> h-<horizon>"`)
@@ -820,6 +863,7 @@ terml_g <- function(base, hat, obs, agg_order,
                     chunk_strategy = c("sequential", "random"),
                     batch_checkpoint_dir = NULL,
                     nrounds_per_batch = 50L,
+                    level_id = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
   if (missing(base)) {
@@ -860,12 +904,14 @@ terml_g <- function(base, hat, obs, agg_order,
                        batch_size = batch_size,
                        chunk_strategy = chunk_strategy,
                        batch_checkpoint_dir = batch_checkpoint_dir,
-                       nrounds_per_batch = nrounds_per_batch, ...)
+                       nrounds_per_batch = nrounds_per_batch,
+                       level_id = level_id, kset = agg_order, ...)
   } else {
     rml_g(approach = approach, hat = hat_norm, obs = obs,
           params = params, seed = seed,
           early_stopping_rounds = early_stopping_rounds,
-          validation_split = validation_split, ...)
+          validation_split = validation_split,
+          level_id = level_id, kset = agg_order, ...)
   }
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
@@ -919,6 +965,10 @@ terml_g <- function(base, hat, obs, agg_order,
 #' @param batch_checkpoint_dir character path for batch model checkpoints.
 #'   `NULL` disables.
 #' @param nrounds_per_batch integer; boosting rounds added per batch. Default 50.
+#' @param level_id Logical (default `FALSE`). If `TRUE`, appends an ordered-integer
+#'   temporal-aggregation-level feature to the stacked training matrix.
+#'   `level_id = 1` = finest granularity; `level_id = max` = coarsest.
+#'   Requires the level structure to be derivable from `agg_order`.
 #' @param ... passed to [rml_g].
 #' @return Numeric matrix (`n × (h × kt)` where `kt = sum(max(agg_order)/agg_order)`)
 #'   of cross-temporal reconciled forecasts, with `attr(., "FoReco")` of class
@@ -953,6 +1003,7 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     chunk_strategy = c("sequential", "random"),
                     batch_checkpoint_dir = NULL,
                     nrounds_per_batch = 50L,
+                    level_id = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
   if (missing(base)) {
@@ -988,12 +1039,14 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                        batch_size = batch_size,
                        chunk_strategy = chunk_strategy,
                        batch_checkpoint_dir = batch_checkpoint_dir,
-                       nrounds_per_batch = nrounds_per_batch, ...)
+                       nrounds_per_batch = nrounds_per_batch,
+                       level_id = level_id, kset = agg_order, ...)
   } else {
     rml_g(approach = approach, hat = hat_norm, obs = obs,
           params = params, seed = seed,
           early_stopping_rounds = early_stopping_rounds,
-          validation_split = validation_split, ...)
+          validation_split = validation_split,
+          level_id = level_id, kset = agg_order, ...)
   }
   fit_obj$agg_mat     <- agg_mat
   fit_obj$agg_order   <- agg_order
@@ -1021,6 +1074,8 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
 rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
                            early_stopping_rounds = 0L,
                            validation_split = 0,
+                           level_id = FALSE,
+                           kset = NULL,
                            ...) {
   if (!requireNamespace("catboost", quietly = TRUE)) {
     cli_abort(
@@ -1030,6 +1085,8 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
   }
 
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -1079,7 +1136,9 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "catboost",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(stack$X_stacked)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset
     ),
     class = "rml_g_fit"
   )
@@ -1112,6 +1171,27 @@ predict.rml_g_fit <- function(object, newdata, series_id = NULL, ...) {
     cli_abort("{.arg newdata} is required.", call = NULL)
   }
   newdata <- as.matrix(newdata)
+
+  # --- level_id reconstruction at predict time --------------------------------
+  # When the model was trained with level_id=TRUE, each prediction row must
+  # also carry the corresponding temporal-aggregation-level integer column.
+  # Rows cycle through the same positional pattern as training.
+  if (isTRUE(object$use_level_id) && !is.null(object$kset)) {
+    kset        <- object$kset
+    sorted_kset <- sort(unique(kset))
+    m           <- max(kset)
+    k_to_level  <- setNames(seq_along(sorted_kset), as.character(sorted_kset))
+    n_pred      <- NROW(newdata)
+    cycle_pos   <- ((seq_len(n_pred) - 1L) %% m) + 1L
+    # For each position, find which kset value "owns" it.
+    level_at_pos <- vapply(cycle_pos, function(cp) {
+      eligible <- kset[cp %% kset == 0L]
+      if (length(eligible) == 0L) eligible <- min(kset)
+      k_to_level[[as.character(max(eligible))]]
+    }, integer(1L))
+    newdata <- cbind(newdata, level_id_col = level_at_pos)
+  }
+
   if (!is.null(object$ncol_hat) && ncol(newdata) != object$ncol_hat) {
     cli_abort(
       "{.arg newdata} must have {object$ncol_hat} columns (matching training {.arg hat}); got {ncol(newdata)}.",
