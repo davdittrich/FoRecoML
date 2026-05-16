@@ -12,6 +12,8 @@ rml_g(
   seed = NULL,
   early_stopping_rounds = 0L,
   validation_split = 0,
+  level_id = FALSE,
+  kset = NULL,
   ...
 )
 }
