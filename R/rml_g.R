@@ -93,20 +93,29 @@
   # G4: global train/valid split computed ONCE; reused across batches in T7.4.
   n_total <- T_obs * p
   if (validation_split > 0) {
-    n_valid <- max(round(validation_split * n_total), 1L)
-    if (n_valid < min_validation_rows) {
+    n_per_series <- max(1L, round(validation_split * T_obs))
+    if (n_per_series >= T_obs) {
+      cli_abort(
+        "`validation_split` too large: {n_per_series} of {T_obs} rows used as validation, leaving none for training.",
+        call = NULL
+      )
+    }
+    # Temporal block: last n_per_series rows from each series block (series-major stack).
+    # Series j occupies stacked rows ((j-1)*T_obs + 1):(j*T_obs); take last n_per_series.
+    valid_idx <- unlist(lapply(seq_len(p), function(j) {
+      block_end <- j * T_obs
+      (block_end - n_per_series + 1L):block_end
+    }))
+    n_valid_total <- n_per_series * p
+    if (n_valid_total < min_validation_rows) {
       cli_warn(
-        c(
-          "Validation set has only {n_valid} row{?s} (< {min_validation_rows}).",
-          "i" = "Early stopping disabled."
-        ),
+        c("Validation set has only {n_valid_total} row{?s} (< {min_validation_rows}).",
+          "i" = "Early stopping disabled."),
         call = NULL
       )
       valid_idx <- integer(0L)
       train_idx <- seq_len(n_total)
     } else {
-      if (!is.null(seed)) set.seed(seed)
-      valid_idx <- sort(sample.int(n_total, n_valid))
       train_idx <- setdiff(seq_len(n_total), valid_idx)
     }
   } else {

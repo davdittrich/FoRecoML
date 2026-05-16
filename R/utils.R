@@ -551,7 +551,8 @@ compute_rec_residuals <- function(fit_obj) {
                        series_id = series_ids)
   resid_vec <- fit_obj$y_valid - preds
   p         <- length(fit_obj$series_id_levels)
-  T_valid   <- length(resid_vec) %/% p  # integer division; guard below
+  n_valid_per_series <- length(fit_obj$valid_idx) %/% p
+  T_valid <- n_valid_per_series
   if (T_valid * p != length(resid_vec)) {
     cli_abort("Validation residual count {length(resid_vec)} not divisible by p={p}.",
               call = NULL)
