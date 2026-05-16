@@ -6,7 +6,8 @@
 # Private helper: stack series into long-format training matrix.
 #
 # Returns:
-#   X_stacked        : (T_obs*p) x ncol(hat) numeric matrix (no series_id column)
+#   X_stacked        : (T_obs*p) x ncol_hat numeric matrix (no series_id column;
+#                      ncol_hat = ncol(hat) + 1L when level_id=TRUE, else ncol(hat))
 #   y_stacked        : length T_obs*p numeric vector
 #   series_id_factor : factor with FROZEN, alphabetically-sorted levels
 #   series_id_int    : 1-based integer (1..p) for backends that need raw ints
@@ -18,10 +19,12 @@
 # Series order in the stack: column-major over `obs`, i.e. series 1 occupies the
 # first T_obs rows, series 2 the next T_obs rows, and so on.
 .stack_series <- function(hat, obs, kset = NULL,
+                          level_id = FALSE,
                           validation_split = 0,
                           seed = NULL,
                           min_validation_rows = 10L) {
-  # `kset` is reserved for T7.4 (temporal aggregation orders); v1 ignores it.
+  # level_id=TRUE appends a temporal-aggregation-level column to X_stacked.
+  # kset must be supplied when level_id=TRUE.
 
   p <- NCOL(obs)
   T_obs <- NROW(obs)
@@ -31,6 +34,13 @@
       "{.arg hat} has {NROW(hat)} rows, {.arg obs} has {T_obs} rows; must match.",
       call = NULL
     )
+  }
+
+  if (isTRUE(level_id) && is.null(kset)) {
+    cli_abort("level_id=TRUE requires kset.", call = NULL)
+  }
+  if (isTRUE(level_id) && (length(kset) == 0L || any(kset < 1L))) {
+    cli_abort("kset must be a non-empty vector of positive integers.", call = NULL)
   }
 
   series_names <- if (!is.null(colnames(obs))) {
@@ -48,6 +58,33 @@
   # rbind hat p times; the same `hat` features are shared across series.
   X_stacked <- do.call(rbind, rep(list(hat_mat), p))
   y_stacked <- as.numeric(obs_mat)  # column-major: series 1, series 2, ...
+
+  # Append level_id column when requested.
+  # level_id for row t = the ordinal rank (1=finest, max=coarsest) of the
+  # coarsest temporal-aggregation level whose period starts at cycle position
+  # ((t-1) %% max(kset)) + 1.
+  if (isTRUE(level_id)) {
+    m <- max(kset)
+    sorted_kset <- sort(kset)                         # ascending: finest first
+    k_to_level  <- setNames(seq_along(sorted_kset),   # 1=finest, max=coarsest
+                             as.character(sorted_kset))
+
+    # For each cycle position 1..m, find the coarsest k that starts there.
+    # k starts at cycle position pos iff (pos-1) %% k == 0.
+    level_at_pos <- vapply(seq_len(m), function(pos) {
+      starts   <- kset[(pos - 1L) %% kset == 0L]
+      coarsest <- max(starts)
+      k_to_level[[as.character(coarsest)]]
+    }, integer(1L))
+
+    # Each of the T_obs rows in hat maps to a cycle position.
+    cycle_pos      <- ((seq_len(T_obs) - 1L) %% m) + 1L
+    row_level_ids  <- level_at_pos[cycle_pos]         # length T_obs
+
+    # X_stacked has T_obs*p rows (p repetitions of hat rows).
+    level_id_col   <- rep(row_level_ids, times = p)   # length T_obs*p
+    X_stacked      <- cbind(X_stacked, level_id_col = level_id_col)
+  }
 
   series_id_char <- rep(series_names, each = T_obs)
   series_id_factor <- factor(series_id_char, levels = series_id_levels)
@@ -202,7 +239,7 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "lightgbm",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked)
     ),
     class = "rml_g_fit"
   )
@@ -268,7 +305,7 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "xgboost",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked)
     ),
     class = "rml_g_fit"
   )
@@ -315,7 +352,7 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "ranger",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked)
     ),
     class = "rml_g_fit"
   )
@@ -356,7 +393,7 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "mlr3",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked)
     ),
     class = "rml_g_fit"
   )
@@ -700,7 +737,6 @@ csrml_g <- function(base, hat, obs, agg_mat,
           early_stopping_rounds = early_stopping_rounds,
           validation_split = validation_split, ...)
   }
-  fit_obj$ncol_hat    <- ncol(hat)
   fit_obj$agg_mat     <- agg_mat
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "cs"
@@ -831,7 +867,6 @@ terml_g <- function(base, hat, obs, agg_order,
           early_stopping_rounds = early_stopping_rounds,
           validation_split = validation_split, ...)
   }
-  fit_obj$ncol_hat    <- ncol(hat)
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "te"
@@ -960,7 +995,6 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
           early_stopping_rounds = early_stopping_rounds,
           validation_split = validation_split, ...)
   }
-  fit_obj$ncol_hat    <- ncol(hat)
   fit_obj$agg_mat     <- agg_mat
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
@@ -1045,7 +1079,7 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "catboost",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked)
     ),
     class = "rml_g_fit"
   )
