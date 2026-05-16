@@ -699,6 +699,13 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 #'   (non-negative reconciliation). Default `FALSE`.
 #' @param round Logical. If `TRUE`, round reconciled values to the number of
 #'   decimal places of the base forecasts. Passed to `FoReco::csbu`. Default `FALSE`.
+#' @param method Character. `"bu"` (default) for bottom-up reconciliation, or
+#'   `"rec"` for FoReco optimal combination via [FoReco::csrec].
+#' @param comb Character; combination method passed to the FoReco reconciliation
+#'   function when `method = "rec"`. Default `"ols"`. See FoReco documentation for
+#'   valid values; supported values with internal residuals vary by framework.
+#' @param res Optional numeric matrix of pre-computed residuals for `method = "rec"`.
+#'   If `NULL` (default), residuals are computed internally from the validation split.
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
@@ -742,6 +749,9 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
                     sntz = FALSE, round = FALSE,
+                    method = c("bu", "rec"),
+                    comb = "ols",
+                    res = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
                     batch_size = NULL,
@@ -751,6 +761,16 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     level_id = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
+  method <- match.arg(method)
+  if (identical(comb, "insample")) {
+    cli_abort(
+      "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
+      call = NULL
+    )
+  }
+  if (method == "rec") {
+    cli_abort("method='rec' is not yet implemented; see P1.T3.", call = NULL)
+  }
   if (isTRUE(level_id)) {
     cli_abort(
       "{.arg level_id} is not applicable to {.fn csrml_g}; the cross-sectional hierarchy has no temporal axis.",
@@ -834,6 +854,13 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #'   decimal places of the base forecasts. Passed to `FoReco::tebu`. Default `FALSE`.
 #' @param tew Character. Temporal aggregation weighting passed to `FoReco::tebu`.
 #'   Default `"sum"`.
+#' @param method Character. `"bu"` (default) for bottom-up reconciliation, or
+#'   `"rec"` for FoReco optimal combination via [FoReco::terec].
+#' @param comb Character; combination method passed to the FoReco reconciliation
+#'   function when `method = "rec"`. Default `"ols"`. See FoReco documentation for
+#'   valid values; supported values with internal residuals vary by framework.
+#' @param res Optional numeric matrix of pre-computed residuals for `method = "rec"`.
+#'   If `NULL` (default), residuals are computed internally from the validation split.
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
@@ -877,6 +904,9 @@ terml_g <- function(base, hat, obs, agg_order,
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
                     sntz = FALSE, round = FALSE, tew = "sum",
+                    method = c("bu", "rec"),
+                    comb = "ols",
+                    res = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
                     batch_size = NULL,
@@ -886,6 +916,16 @@ terml_g <- function(base, hat, obs, agg_order,
                     level_id = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
+  method <- match.arg(method)
+  if (identical(comb, "insample")) {
+    cli_abort(
+      "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
+      call = NULL
+    )
+  }
+  if (method == "rec") {
+    cli_abort("method='rec' is not yet implemented; see P1.T3.", call = NULL)
+  }
   if (missing(base)) {
     cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
   }
@@ -975,6 +1015,13 @@ terml_g <- function(base, hat, obs, agg_order,
 #'   decimal places of the base forecasts. Passed to `FoReco::ctbu`. Default `FALSE`.
 #' @param tew Character. Temporal aggregation weighting passed to `FoReco::ctbu`.
 #'   Default `"sum"`.
+#' @param method Character. `"bu"` (default) for bottom-up reconciliation, or
+#'   `"rec"` for FoReco optimal combination via [FoReco::ctrec].
+#' @param comb Character; combination method passed to the FoReco reconciliation
+#'   function when `method = "rec"`. Default `"ols"`. See FoReco documentation for
+#'   valid values; supported values with internal residuals vary by framework.
+#' @param res Optional numeric matrix of pre-computed residuals for `method = "rec"`.
+#'   If `NULL` (default), residuals are computed internally from the validation split.
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
@@ -1022,6 +1069,9 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
                     sntz = FALSE, round = FALSE, tew = "sum",
+                    method = c("bu", "rec"),
+                    comb = "ols",
+                    res = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
                     batch_size = NULL,
@@ -1031,6 +1081,16 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     level_id = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
+  method <- match.arg(method)
+  if (identical(comb, "insample")) {
+    cli_abort(
+      "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
+      call = NULL
+    )
+  }
+  if (method == "rec") {
+    cli_abort("method='rec' is not yet implemented; see P1.T3.", call = NULL)
+  }
   if (missing(base)) {
     cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
   }
