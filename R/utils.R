@@ -543,10 +543,19 @@ compute_rec_residuals <- function(fit_obj) {
       call = NULL
     )
   }
-  preds     <- predict(fit_obj, newdata = fit_obj$X_valid)
+  # Pass series_id explicitly to prevent the broadcast path from replicating
+  # each row p times (which would give preds of length T_valid*p, not T_valid).
+  # Convert stored integer indices back to character level names for predict().
+  series_ids <- fit_obj$series_id_levels[fit_obj$series_id_int_valid]
+  preds     <- predict(fit_obj, newdata = fit_obj$X_valid,
+                       series_id = series_ids)
   resid_vec <- fit_obj$y_valid - preds
   p         <- length(fit_obj$series_id_levels)
-  T_valid   <- length(resid_vec) / p
+  T_valid   <- length(resid_vec) %/% p  # integer division; guard below
+  if (T_valid * p != length(resid_vec)) {
+    cli_abort("Validation residual count {length(resid_vec)} not divisible by p={p}.",
+              call = NULL)
+  }
   matrix(resid_vec, nrow = T_valid, ncol = p,
          dimnames = list(NULL, fit_obj$series_id_levels))
 }

@@ -248,9 +248,13 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
       kset               = kset,
-      valid_idx          = stack$valid_idx,
-      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
-      y_valid            = stack$y_stacked[stack$valid_idx]
+      valid_idx           = stack$valid_idx,
+      X_valid             = {
+        x <- stack$X_stacked[stack$valid_idx, , drop = FALSE]
+        if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
+      },
+      y_valid              = stack$y_stacked[stack$valid_idx],
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -323,9 +327,13 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
       kset               = kset,
-      valid_idx          = stack$valid_idx,
-      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
-      y_valid            = stack$y_stacked[stack$valid_idx]
+      valid_idx           = stack$valid_idx,
+      X_valid             = {
+        x <- stack$X_stacked[stack$valid_idx, , drop = FALSE]
+        if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
+      },
+      y_valid              = stack$y_stacked[stack$valid_idx],
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -379,9 +387,13 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
       kset               = kset,
-      valid_idx          = stack$valid_idx,
-      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
-      y_valid            = stack$y_stacked[stack$valid_idx]
+      valid_idx           = stack$valid_idx,
+      X_valid             = {
+        x <- stack$X_stacked[stack$valid_idx, , drop = FALSE]
+        if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
+      },
+      y_valid              = stack$y_stacked[stack$valid_idx],
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -429,9 +441,13 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
       kset               = kset,
-      valid_idx          = stack$valid_idx,
-      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
-      y_valid            = stack$y_stacked[stack$valid_idx]
+      valid_idx           = stack$valid_idx,
+      X_valid             = {
+        x <- stack$X_stacked[stack$valid_idx, , drop = FALSE]
+        if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
+      },
+      y_valid              = stack$y_stacked[stack$valid_idx],
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -665,9 +681,10 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       kset               = NULL,
       best_iter_history  = best_iter_history,
       batch_indices      = batch_indices,
-      valid_idx          = integer(0),
-      X_valid            = matrix(numeric(0), nrow = 0L, ncol = ncol_hat),
-      y_valid            = numeric(0)
+      valid_idx           = integer(0),
+      X_valid             = matrix(numeric(0), nrow = 0L, ncol = ncol_hat),
+      y_valid              = numeric(0L),
+      series_id_int_valid  = integer(0L)
     ),
     class = "rml_g_fit"
   )
@@ -1393,9 +1410,13 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       ncol_hat           = ncol(stack$X_stacked),
       use_level_id       = isTRUE(level_id),
       kset               = kset,
-      valid_idx          = stack$valid_idx,
-      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
-      y_valid            = stack$y_stacked[stack$valid_idx]
+      valid_idx           = stack$valid_idx,
+      X_valid             = {
+        x <- stack$X_stacked[stack$valid_idx, , drop = FALSE]
+        if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
+      },
+      y_valid              = stack$y_stacked[stack$valid_idx],
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
