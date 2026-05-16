@@ -699,6 +699,9 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 #'   (non-negative reconciliation). Default `FALSE`.
 #' @param round Logical. If `TRUE`, round reconciled values to the number of
 #'   decimal places of the base forecasts. Passed to `FoReco::csbu`. Default `FALSE`.
+#' @param nonneg_method Character. Non-negative reconciliation method. `"sntz"`
+#'   (default) clips negatives post-BU. `"bpv"`, `"nfca"`, `"nnic"`, `"osqp"` use
+#'   FoReco's projection-based non-negative methods. See [FoReco::csrec] `nn` argument.
 #' @param method Character. `"bu"` (default) for bottom-up reconciliation, or
 #'   `"rec"` for FoReco optimal combination via [FoReco::csrec].
 #' @param comb Character; combination method passed to the FoReco reconciliation
@@ -749,6 +752,7 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
                     sntz = FALSE, round = FALSE,
+                    nonneg_method = c("sntz", "bpv", "nfca", "nnic", "osqp"),
                     method = c("bu", "rec"),
                     comb = "ols",
                     res = NULL,
@@ -762,6 +766,7 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     ...) {
   normalize <- match.arg(normalize)
   method <- match.arg(method)
+  nonneg_method <- match.arg(nonneg_method)
   if (identical(comb, "insample")) {
     cli_abort(
       "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
@@ -852,6 +857,29 @@ csrml_g <- function(base, hat, obs, agg_mat,
     ))
     return(reco_mat)
   }
+  # Non-negative dispatch (projection-based methods via FoReco::csrec)
+  if (!identical(nonneg_method, "sntz")) {
+    sparsity_pct <- mean(bts_vec < 0) * 100
+    if (sparsity_pct > 30)
+      cli_warn(
+        "Base predictions are {round(sparsity_pct, 1)}% negative; {.val {nonneg_method}} may produce degenerate face. Consider {.val 'sntz'}.",
+        call = NULL
+      )
+    base_full_cs <- unclass(FoReco::csbu(bts_mat, agg_mat = fit_obj$agg_mat))
+    attr(base_full_cs, "FoReco") <- NULL
+    reco_mat <- FoReco::csrec(
+      base     = base_full_cs,
+      agg_mat  = fit_obj$agg_mat,
+      cons_mat = NULL,
+      nn       = nonneg_method,
+      res      = NULL
+    )
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Cross-sectional",
+      forecast_horizon = h, rfun = "csrml_g", ml = approach
+    ))
+    return(reco_mat)
+  }
   reco_mat <- FoReco::csbu(bts_mat, agg_mat = fit_obj$agg_mat, sntz = sntz, round = round)
   attr(reco_mat, "FoReco") <- new_foreco_info(list(
     fit = fit_obj, framework = "Cross-sectional",
@@ -885,6 +913,9 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #'   (non-negative reconciliation). Default `FALSE`.
 #' @param round Logical. If `TRUE`, round reconciled values to the number of
 #'   decimal places of the base forecasts. Passed to `FoReco::tebu`. Default `FALSE`.
+#' @param nonneg_method Character. Non-negative reconciliation method. `"sntz"`
+#'   (default) clips negatives post-BU. `"bpv"`, `"nfca"`, `"nnic"`, `"osqp"` use
+#'   FoReco's projection-based non-negative methods. See [FoReco::terec] `nn` argument.
 #' @param tew Character. Temporal aggregation weighting passed to `FoReco::tebu`.
 #'   Default `"sum"`.
 #' @param method Character. `"bu"` (default) for bottom-up reconciliation, or
@@ -936,7 +967,9 @@ terml_g <- function(base, hat, obs, agg_order,
                     normalize = c("none", "zscore", "robust"),
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
-                    sntz = FALSE, round = FALSE, tew = "sum",
+                    sntz = FALSE, round = FALSE,
+                    nonneg_method = c("sntz", "bpv", "nfca", "nnic", "osqp"),
+                    tew = "sum",
                     method = c("bu", "rec"),
                     comb = "ols",
                     res = NULL,
@@ -950,6 +983,7 @@ terml_g <- function(base, hat, obs, agg_order,
                     ...) {
   normalize <- match.arg(normalize)
   method <- match.arg(method)
+  nonneg_method <- match.arg(nonneg_method)
   if (identical(comb, "insample")) {
     cli_abort(
       "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
@@ -1030,6 +1064,28 @@ terml_g <- function(base, hat, obs, agg_order,
     ))
     return(reco_vec)
   }
+  # Non-negative dispatch (projection-based methods via FoReco::terec)
+  if (!identical(nonneg_method, "sntz")) {
+    sparsity_pct <- mean(bts_vec < 0) * 100
+    if (sparsity_pct > 30)
+      cli_warn(
+        "Base predictions are {round(sparsity_pct, 1)}% negative; {.val {nonneg_method}} may produce degenerate face. Consider {.val 'sntz'}.",
+        call = NULL
+      )
+    base_full_te <- FoReco::tebu(bts_vec, agg_order = fit_obj$agg_order, tew = tew)
+    reco_vec <- FoReco::terec(
+      base      = base_full_te,
+      agg_order = fit_obj$agg_order,
+      tew       = tew,
+      nn        = nonneg_method,
+      res       = NULL
+    )
+    attr(reco_vec, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Temporal",
+      forecast_horizon = nrow(base) / m, rfun = "terml_g", ml = approach
+    ))
+    return(reco_vec)
+  }
   # tebu expects a vector of length h_hf = h * m (nb=1 invariant for terml_g)
   reco_vec <- FoReco::tebu(bts_vec, agg_order = fit_obj$agg_order, tew = tew, sntz = sntz, round = round)
   attr(reco_vec, "FoReco") <- new_foreco_info(list(
@@ -1065,6 +1121,9 @@ terml_g <- function(base, hat, obs, agg_order,
 #'   (non-negative reconciliation). Default `FALSE`.
 #' @param round Logical. If `TRUE`, round reconciled values to the number of
 #'   decimal places of the base forecasts. Passed to `FoReco::ctbu`. Default `FALSE`.
+#' @param nonneg_method Character. Non-negative reconciliation method. `"sntz"`
+#'   (default) clips negatives post-BU. `"bpv"`, `"nfca"`, `"nnic"`, `"osqp"` use
+#'   FoReco's projection-based non-negative methods. See [FoReco::ctrec] `nn` argument.
 #' @param tew Character. Temporal aggregation weighting passed to `FoReco::ctbu`.
 #'   Default `"sum"`.
 #' @param method Character. `"bu"` (default) for bottom-up reconciliation, or
@@ -1120,7 +1179,9 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     normalize = c("none", "zscore", "robust"),
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
-                    sntz = FALSE, round = FALSE, tew = "sum",
+                    sntz = FALSE, round = FALSE,
+                    nonneg_method = c("sntz", "bpv", "nfca", "nnic", "osqp"),
+                    tew = "sum",
                     method = c("bu", "rec"),
                     comb = "ols",
                     res = NULL,
@@ -1134,6 +1195,7 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     ...) {
   normalize <- match.arg(normalize)
   method <- match.arg(method)
+  nonneg_method <- match.arg(nonneg_method)
   if (identical(comb, "insample")) {
     cli_abort(
       "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
@@ -1212,6 +1274,35 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
       agg_order = fit_obj$agg_order,
       tew       = tew,
       comb      = comb,
+      res       = NULL
+    )
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Cross-temporal",
+      forecast_horizon = h_hf / m, rfun = "ctrml_g", ml = approach
+    ))
+    return(reco_mat)
+  }
+  # Non-negative dispatch (projection-based methods via FoReco::ctrec)
+  if (!identical(nonneg_method, "sntz")) {
+    sparsity_pct <- mean(bts_vec < 0) * 100
+    if (sparsity_pct > 30)
+      cli_warn(
+        "Base predictions are {round(sparsity_pct, 1)}% negative; {.val {nonneg_method}} may produce degenerate face. Consider {.val 'sntz'}.",
+        call = NULL
+      )
+    base_full_ct_raw <- FoReco::ctbu(t(bts_mat),
+                                     agg_mat   = fit_obj$agg_mat,
+                                     agg_order = fit_obj$agg_order,
+                                     tew       = tew)
+    base_full_ct <- unclass(base_full_ct_raw)
+    attr(base_full_ct, "FoReco") <- NULL
+    reco_mat <- FoReco::ctrec(
+      base      = base_full_ct,
+      agg_mat   = fit_obj$agg_mat,
+      cons_mat  = NULL,
+      agg_order = fit_obj$agg_order,
+      tew       = tew,
+      nn        = nonneg_method,
       res       = NULL
     )
     attr(reco_mat, "FoReco") <- new_foreco_info(list(

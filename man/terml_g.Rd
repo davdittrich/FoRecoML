@@ -14,12 +14,20 @@ terml_g(
   scale_fn = "gmd",
   params = NULL,
   seed = NULL,
+  sntz = FALSE,
+  round = FALSE,
+  nonneg_method = c("sntz", "bpv", "nfca", "nnic", "osqp"),
+  tew = "sum",
+  method = c("bu", "rec"),
+  comb = "ols",
+  res = NULL,
   early_stopping_rounds = 0L,
   validation_split = 0,
   batch_size = NULL,
   chunk_strategy = c("sequential", "random"),
   batch_checkpoint_dir = NULL,
   nrounds_per_batch = 50L,
+  level_id = FALSE,
   ...
 )
 }
@@ -48,6 +56,29 @@ fitting.}
 
 \item{seed}{integer for reproducibility.}
 
+\item{sntz}{Logical. If \code{TRUE}, set negative reconciled values to zero
+(non-negative reconciliation). Default \code{FALSE}.}
+
+\item{round}{Logical. If \code{TRUE}, round reconciled values to the number of
+decimal places of the base forecasts. Passed to \code{FoReco::tebu}. Default \code{FALSE}.}
+
+\item{nonneg_method}{Character. Non-negative reconciliation method. \code{"sntz"}
+(default) clips negatives post-BU. \code{"bpv"}, \code{"nfca"}, \code{"nnic"}, \code{"osqp"} use
+FoReco's projection-based non-negative methods. See \link[FoReco:terec]{FoReco::terec} \code{nn} argument.}
+
+\item{tew}{Character. Temporal aggregation weighting passed to \code{FoReco::tebu}.
+Default \code{"sum"}.}
+
+\item{method}{Character. \code{"bu"} (default) for bottom-up reconciliation, or
+\code{"rec"} for FoReco optimal combination via \link[FoReco:terec]{FoReco::terec}.}
+
+\item{comb}{Character; combination method passed to the FoReco reconciliation
+function when \code{method = "rec"}. Default \code{"ols"}. See FoReco documentation for
+valid values; supported values with internal residuals vary by framework.}
+
+\item{res}{Optional numeric matrix of pre-computed residuals for \code{method = "rec"}.
+If \code{NULL} (default), residuals are computed internally from the validation split.}
+
 \item{early_stopping_rounds}{integer; \code{0} disables early stopping.}
 
 \item{validation_split}{fraction of stacked rows reserved for validation
@@ -64,11 +95,18 @@ memory-based heuristic. Not supported for catboost.}
 
 \item{nrounds_per_batch}{integer; boosting rounds added per batch. Default 50.}
 
+\item{level_id}{Logical (default \code{FALSE}). If \code{TRUE}, appends an ordered-integer
+temporal-aggregation-level feature to the stacked training matrix.
+\code{level_id = 1} = finest granularity; \code{level_id = max} = coarsest.
+Requires the level structure to be derivable from \code{agg_order}.}
+
 \item{...}{passed to \link{rml_g}.}
 }
 \value{
-\code{rml_g_fit} object with additional fields \code{agg_order}, \code{norm_params},
-and \code{framework = "te"}.
+Named numeric vector matching \code{FoReco::tebu()} output (length \verb{h × kt}
+where \code{kt = sum(max(agg_order)/agg_order)}; names like \code{"k-<order> h-<horizon>"})
+with \code{attr(., "FoReco")} of class \code{foreco_info}. Use \link{extract_reconciled_ml}
+to access the underlying \code{rml_g_fit}.
 }
 \description{
 Normalizes \code{hat} (optionally), fits a single global ML model across all
@@ -79,12 +117,18 @@ produced by calling \link{predict.rml_g_fit} (T7.5) on the returned object.
 \examples{
 \dontrun{
 agg_order <- c(4L, 2L, 1L)  # annual, semi-annual, quarterly
-n_levels <- sum(agg_order)
-N_hat <- 40; h <- 1
-hat <- matrix(rnorm(n_levels * N_hat), N_hat, n_levels)
-obs <- matrix(rnorm(N_hat), N_hat, 1L)  # one bottom-level series
-base <- matrix(rnorm(n_levels * h), h, n_levels)
+m <- max(agg_order)
+kt <- sum(m / agg_order)
+T_obs <- 60L; h <- 2L
+hat <- matrix(rnorm(kt * T_obs), T_obs, kt)
+obs <- matrix(rnorm(T_obs), T_obs, 1L)  # one bottom-level series
+base <- matrix(rnorm(h * m * kt), h * m, kt)
+r <- terml_g(base = base, hat = hat, obs = obs,
+             agg_order = agg_order, approach = "lightgbm", seed = 1L)
+
+# Enable level_id for stronger per-level corrections
 fit <- terml_g(base = base, hat = hat, obs = obs,
-               agg_order = agg_order, approach = "lightgbm", seed = 1L)
+               agg_order = c(4L, 2L, 1L),
+               level_id = TRUE, seed = 1L)
 }
 }

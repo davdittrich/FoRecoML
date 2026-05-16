@@ -14,12 +14,19 @@ csrml_g(
   scale_fn = "gmd",
   params = NULL,
   seed = NULL,
+  sntz = FALSE,
+  round = FALSE,
+  nonneg_method = c("sntz", "bpv", "nfca", "nnic", "osqp"),
+  method = c("bu", "rec"),
+  comb = "ols",
+  res = NULL,
   early_stopping_rounds = 0L,
   validation_split = 0,
   batch_size = NULL,
   chunk_strategy = c("sequential", "random"),
   batch_checkpoint_dir = NULL,
   nrounds_per_batch = 50L,
+  level_id = FALSE,
   ...
 )
 }
@@ -48,6 +55,26 @@ bottom-level series.}
 
 \item{seed}{integer for reproducibility.}
 
+\item{sntz}{Logical. If \code{TRUE}, set negative reconciled values to zero
+(non-negative reconciliation). Default \code{FALSE}.}
+
+\item{round}{Logical. If \code{TRUE}, round reconciled values to the number of
+decimal places of the base forecasts. Passed to \code{FoReco::csbu}. Default \code{FALSE}.}
+
+\item{nonneg_method}{Character. Non-negative reconciliation method. \code{"sntz"}
+(default) clips negatives post-BU. \code{"bpv"}, \code{"nfca"}, \code{"nnic"}, \code{"osqp"} use
+FoReco's projection-based non-negative methods. See \link[FoReco:csrec]{FoReco::csrec} \code{nn} argument.}
+
+\item{method}{Character. \code{"bu"} (default) for bottom-up reconciliation, or
+\code{"rec"} for FoReco optimal combination via \link[FoReco:csrec]{FoReco::csrec}.}
+
+\item{comb}{Character; combination method passed to the FoReco reconciliation
+function when \code{method = "rec"}. Default \code{"ols"}. See FoReco documentation for
+valid values; supported values with internal residuals vary by framework.}
+
+\item{res}{Optional numeric matrix of pre-computed residuals for \code{method = "rec"}.
+If \code{NULL} (default), residuals are computed internally from the validation split.}
+
 \item{early_stopping_rounds}{integer; \code{0} disables early stopping.}
 
 \item{validation_split}{fraction of stacked rows reserved for validation
@@ -67,11 +94,15 @@ model checkpoints. \code{NULL} disables batch checkpointing.}
 \item{nrounds_per_batch}{integer; additional boosting rounds added per batch
 when using incremental training. Default 50.}
 
+\item{level_id}{Logical. Must be \code{FALSE} (the default).
+\code{\link[=csrml_g]{csrml_g()}} has no temporal axis; passing \code{TRUE} signals a user error.}
+
 \item{...}{passed to \link{rml_g}.}
 }
 \value{
-\code{rml_g_fit} object with additional fields \code{agg_mat}, \code{norm_params},
-and \code{framework = "cs"}.
+Numeric matrix (n × h) of cross-sectional reconciled forecasts, with
+\code{attr(., "FoReco")} of class \code{foreco_info}. Use \link{extract_reconciled_ml}
+to access the underlying \code{rml_g_fit}.
 }
 \description{
 Normalizes \code{hat} (optionally), fits a single global ML model across all
