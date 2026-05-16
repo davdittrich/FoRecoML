@@ -245,7 +245,10 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
 
   feature_importance <- tryCatch(
     lightgbm::lgb.importance(fit, percentage = TRUE),
-    error = function(e) NULL
+    error = function(e) {
+      cli_warn("feature_importance extraction failed: {conditionMessage(e)}", call = NULL)
+      NULL
+    }
   )
 
   structure(
@@ -324,7 +327,10 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
 
   feature_importance <- tryCatch(
     xgboost::xgb.importance(model = fit),
-    error = function(e) NULL
+    error = function(e) {
+      cli_warn("feature_importance extraction failed: {conditionMessage(e)}", call = NULL)
+      NULL
+    }
   )
 
   structure(
@@ -385,7 +391,10 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
     ranger_params
   ))
 
-  feature_importance <- tryCatch(fit$variable.importance, error = function(e) NULL)
+  feature_importance <- tryCatch(fit$variable.importance, error = function(e) {
+    cli_warn("feature_importance extraction failed: {conditionMessage(e)}", call = NULL)
+    NULL
+  })
 
   structure(
     list(
@@ -439,7 +448,10 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 
   learner$train(task)
 
-  feature_importance <- tryCatch(learner$importance(), error = function(e) NULL)
+  feature_importance <- tryCatch(learner$importance(), error = function(e) {
+    cli_warn("feature_importance extraction failed: {conditionMessage(e)}", call = NULL)
+    NULL
+  })
 
   structure(
     list(
@@ -1407,7 +1419,10 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
 
   feature_importance <- tryCatch(
     catboost::catboost.get_feature_importance(fit),
-    error = function(e) NULL
+    error = function(e) {
+      cli_warn("feature_importance extraction failed: {conditionMessage(e)}", call = NULL)
+      NULL
+    }
   )
 
   structure(
