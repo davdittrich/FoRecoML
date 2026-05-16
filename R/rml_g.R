@@ -1078,6 +1078,12 @@ predict.rml_g_fit <- function(object, newdata, series_id = NULL, ...) {
     cli_abort("{.arg newdata} is required.", call = NULL)
   }
   newdata <- as.matrix(newdata)
+  if (!is.null(object$ncol_hat) && ncol(newdata) != object$ncol_hat) {
+    cli_abort(
+      "{.arg newdata} must have {object$ncol_hat} columns (matching training {.arg hat}); got {ncol(newdata)}.",
+      call = NULL
+    )
+  }
 
   # --- series_id resolution -------------------------------------------------
   if (is.null(series_id)) {
