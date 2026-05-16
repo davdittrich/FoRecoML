@@ -1,0 +1,109 @@
+---
+title: "Feature Engineering for Global ML Reconciliation"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Feature Engineering for Global ML Reconciliation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Practitioners
+
+The `level_id` flag in `terml_g()` and `ctrml_g()` appends a single integer column
+to the stacked training matrix, encoding which temporal aggregation level each
+training row belongs to. By default it is `FALSE` (off) to preserve backwards
+compatibility.
+
+**When to enable:** hierarchies with strong level-specific forecast error patterns.
+Annual aggregates tend to have near-deterministic corrections; high-frequency leaves
+often have large corrections. A global ML model without `level_id` cannot learn
+these distinct regimes.
+
+**Sparsity caveat:** On hierarchies with many structural zeros in the bottom layer,
+enabling `level_id` does not change the NA handling behaviour. Missing observations
+remain missing; `level_id` is a structural feature, not a data-imputation mechanism.
+
+**Backwards compatibility:** fitting with `level_id = TRUE` produces an `rml_g_fit`
+object with `ncol_hat` reflecting the wider feature matrix. Predictions on new base
+data must supply the same number of feature columns. Attempting to predict with a
+mismatched column count will raise a clear error.
+
+### Quick start
+
+```{r level_id_example, eval = FALSE}
+library(FoRecoML)
+
+# Construct a temporal hierarchy with agg_order = c(4, 2, 1)
+# (annual, semi-annual, quarterly)
+agg_order <- c(4L, 2L, 1L)
+m  <- max(agg_order)       # 4 high-freq periods per annual cycle
+kt <- sum(m / agg_order)   # 1 + 2 + 4 = 7 columns
+
+T_obs <- 60L; h <- 2L
+
+# Hat: T_obs rows × kt columns (one per temporal aggregation period)
+hat <- matrix(rnorm(T_obs * kt), T_obs, kt,
+              dimnames = list(NULL, paste0("L", seq_len(kt))))
+
+# Obs: T_obs rows × 1 column (single bottom-level series)
+obs <- matrix(rnorm(T_obs), T_obs, 1L,
+              dimnames = list(NULL, "S1"))
+
+# Base forecasts: h_hf rows × kt columns
+base <- matrix(rnorm(h * m * kt), h * m, kt,
+               dimnames = list(NULL, paste0("L", seq_len(kt))))
+
+# Without level_id (default)
+result_off <- terml_g(base = base, hat = hat, obs = obs,
+                       agg_order = agg_order, seed = 1L)
+
+# With level_id — model learns level-specific correction
+result_on  <- terml_g(base = base, hat = hat, obs = obs,
+                       agg_order = agg_order, level_id = TRUE, seed = 1L)
+```
+
+## Researchers
+
+### Encoding rationale
+
+`level_id` is encoded as an ordered integer, NOT as one-hot dummy variables.
+Tree-based models (LightGBM, XGBoost, ranger) can recover threshold splits
+from an ordered integer without the collinearity introduced by one-hot encoding.
+A model using 6 one-hot columns for 6 temporal levels gains no additional
+expressiveness over the single ordered integer, but wastes 5 feature columns.
+
+### Reference
+
+The encoding is motivated by empirical findings in Yingjie & Abolghasemi (2024,
+arXiv:2411.06394), who show that cross-hierarchy features including level identity
+are critical for global ML models to differentiate level-specific correction magnitude.
+
+### Ordering convention
+
+`level_id = 1` corresponds to the finest temporal granularity (smallest `k` in
+`agg_order`, e.g. monthly in a monthly/quarterly/annual hierarchy). This is the
+**reverse** of `FoReco::FoReco2matrix`'s list index ordering, where `parts[[1]]`
+corresponds to the coarsest aggregation.
+
+The derivation is `rank(match(kset, sort(kset)))`, which assigns rank 1 to the
+smallest `k` value (finest granularity).
+
+## FoReco optimal combination (`method = "rec"`)
+
+The `method = "rec"` argument enables FoReco's linear optimal reconciliation
+(e.g., OLS, shrinkage) instead of bottom-up:
+
+```{r method_rec, eval = FALSE}
+# OLS reconciliation (no residuals needed)
+result_ols <- csrml_g(base = base, hat = hat, obs = obs,
+                      agg_mat = agg_mat, method = "rec", comb = "ols")
+
+# Shrinkage reconciliation (requires validation split)
+result_shr <- csrml_g(base = base, hat = hat, obs = obs,
+                      agg_mat = agg_mat, method = "rec", comb = "shr",
+                      validation_split = 0.2)
+```
+
+For `terml_g()` and `ctrml_g()`, only `comb = "ols"` is supported with
+`method = "rec"` (other combination methods require full-sample residuals not
+available from the validation split).

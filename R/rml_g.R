@@ -6,7 +6,8 @@
 # Private helper: stack series into long-format training matrix.
 #
 # Returns:
-#   X_stacked        : (T_obs*p) x ncol(hat) numeric matrix (no series_id column)
+#   X_stacked        : (T_obs*p) x ncol_hat numeric matrix (no series_id column;
+#                      ncol_hat = ncol(hat) + 1L when level_id=TRUE, else ncol(hat))
 #   y_stacked        : length T_obs*p numeric vector
 #   series_id_factor : factor with FROZEN, alphabetically-sorted levels
 #   series_id_int    : 1-based integer (1..p) for backends that need raw ints
@@ -18,10 +19,12 @@
 # Series order in the stack: column-major over `obs`, i.e. series 1 occupies the
 # first T_obs rows, series 2 the next T_obs rows, and so on.
 .stack_series <- function(hat, obs, kset = NULL,
+                          level_id = FALSE,
                           validation_split = 0,
                           seed = NULL,
                           min_validation_rows = 10L) {
-  # `kset` is reserved for T7.4 (temporal aggregation orders); v1 ignores it.
+  # level_id=TRUE appends a temporal-aggregation-level column to X_stacked.
+  # kset must be supplied when level_id=TRUE.
 
   p <- NCOL(obs)
   T_obs <- NROW(obs)
@@ -31,6 +34,13 @@
       "{.arg hat} has {NROW(hat)} rows, {.arg obs} has {T_obs} rows; must match.",
       call = NULL
     )
+  }
+
+  if (isTRUE(level_id) && is.null(kset)) {
+    cli_abort("level_id=TRUE requires kset.", call = NULL)
+  }
+  if (isTRUE(level_id) && (length(kset) == 0L || any(kset < 1L))) {
+    cli_abort("kset must be a non-empty vector of positive integers.", call = NULL)
   }
 
   series_names <- if (!is.null(colnames(obs))) {
@@ -48,6 +58,33 @@
   # rbind hat p times; the same `hat` features are shared across series.
   X_stacked <- do.call(rbind, rep(list(hat_mat), p))
   y_stacked <- as.numeric(obs_mat)  # column-major: series 1, series 2, ...
+
+  # Append level_id column when requested.
+  # level_id for row t = the ordinal rank (1=finest, max=coarsest) of the
+  # coarsest temporal-aggregation level whose period starts at cycle position
+  # ((t-1) %% max(kset)) + 1.
+  if (isTRUE(level_id)) {
+    m <- max(kset)
+    sorted_kset <- sort(kset)                         # ascending: finest first
+    k_to_level  <- setNames(seq_along(sorted_kset),   # 1=finest, max=coarsest
+                             as.character(sorted_kset))
+
+    # For each cycle position 1..m, find the coarsest k that starts there.
+    # k starts at cycle position pos iff (pos-1) %% k == 0.
+    level_at_pos <- vapply(seq_len(m), function(pos) {
+      starts   <- kset[(pos - 1L) %% kset == 0L]
+      coarsest <- max(starts)
+      k_to_level[[as.character(coarsest)]]
+    }, integer(1L))
+
+    # Each of the T_obs rows in hat maps to a cycle position.
+    cycle_pos      <- ((seq_len(T_obs) - 1L) %% m) + 1L
+    row_level_ids  <- level_at_pos[cycle_pos]         # length T_obs
+
+    # X_stacked has T_obs*p rows (p repetitions of hat rows).
+    level_id_col   <- rep(row_level_ids, times = p)   # length T_obs*p
+    X_stacked      <- cbind(X_stacked, level_id_col = level_id_col)
+  }
 
   series_id_char <- rep(series_names, each = T_obs)
   series_id_factor <- factor(series_id_char, levels = series_id_levels)
@@ -128,6 +165,8 @@
 rml_g <- function(approach, hat, obs, params = NULL, seed = NULL,
                   early_stopping_rounds = 0L,
                   validation_split = 0,
+                  level_id = FALSE,
+                  kset = NULL,
                   ...) {
   class(approach) <- c(approach, class(approach))
   UseMethod("rml_g", approach)
@@ -138,8 +177,12 @@ rml_g <- function(approach, hat, obs, params = NULL, seed = NULL,
 rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
                            early_stopping_rounds = 0L,
                            validation_split = 0,
+                           level_id = FALSE,
+                           kset = NULL,
                            ...) {
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -202,7 +245,12 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "lightgbm",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -213,8 +261,12 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
 rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
                           early_stopping_rounds = 0L,
                           validation_split = 0,
+                          level_id = FALSE,
+                          kset = NULL,
                           ...) {
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -268,7 +320,12 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "xgboost",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -279,6 +336,8 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
 rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
                          early_stopping_rounds = 0L,
                          validation_split = 0,
+                         level_id = FALSE,
+                         kset = NULL,
                          ...) {
   if (early_stopping_rounds > 0L) {
     cli_inform(
@@ -288,6 +347,8 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
   }
 
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -315,7 +376,12 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "ranger",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -326,8 +392,12 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
 rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
                        early_stopping_rounds = 0L,
                        validation_split = 0,
+                       level_id = FALSE,
+                       kset = NULL,
                        ...) {
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -356,7 +426,12 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "mlr3",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -447,7 +522,8 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 .run_chunked_rml_g <- function(approach, hat, obs, params, seed,
                                early_stopping_rounds, validation_split,
                                batch_size, chunk_strategy,
-                               batch_checkpoint_dir, nrounds_per_batch, ...) {
+                               batch_checkpoint_dir, nrounds_per_batch,
+                               level_id = FALSE, kset = NULL, ...) {
   p        <- NCOL(obs)
   T_obs    <- NROW(obs)
   ncol_hat <- NCOL(hat)
@@ -476,7 +552,8 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
     return(rml_g(approach = approach, hat = hat, obs = obs,
                  params = params, seed = seed,
                  early_stopping_rounds = early_stopping_rounds,
-                 validation_split = validation_split, ...))
+                 validation_split = validation_split,
+                 level_id = level_id, kset = kset, ...))
   }
 
   chunk_strategy <- match.arg(chunk_strategy, c("sequential", "random"))
@@ -584,8 +661,13 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       series_id_levels   = colnames(obs),
       feature_importance = NULL,
       ncol_hat           = ncol_hat,
+      use_level_id       = FALSE,
+      kset               = NULL,
       best_iter_history  = best_iter_history,
-      batch_indices      = batch_indices
+      batch_indices      = batch_indices,
+      valid_idx          = integer(0),
+      X_valid            = matrix(numeric(0), nrow = 0L, ncol = ncol_hat),
+      y_valid            = numeric(0)
     ),
     class = "rml_g_fit"
   )
@@ -613,6 +695,17 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 #'   [normalize_stack].
 #' @param params named list of backend hyperparameters.
 #' @param seed integer for reproducibility.
+#' @param sntz Logical. If `TRUE`, set negative reconciled values to zero
+#'   (non-negative reconciliation). Default `FALSE`.
+#' @param round Logical. If `TRUE`, round reconciled values to the number of
+#'   decimal places of the base forecasts. Passed to `FoReco::csbu`. Default `FALSE`.
+#' @param method Character. `"bu"` (default) for bottom-up reconciliation, or
+#'   `"rec"` for FoReco optimal combination via [FoReco::csrec].
+#' @param comb Character; combination method passed to the FoReco reconciliation
+#'   function when `method = "rec"`. Default `"ols"`. See FoReco documentation for
+#'   valid values; supported values with internal residuals vary by framework.
+#' @param res Optional numeric matrix of pre-computed residuals for `method = "rec"`.
+#'   If `NULL` (default), residuals are computed internally from the validation split.
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
@@ -626,9 +719,12 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 #'   model checkpoints. `NULL` disables batch checkpointing.
 #' @param nrounds_per_batch integer; additional boosting rounds added per batch
 #'   when using incremental training. Default 50.
+#' @param level_id Logical. Must be `FALSE` (the default).
+#'   [csrml_g()] has no temporal axis; passing `TRUE` signals a user error.
 #' @param ... passed to [rml_g].
-#' @return `rml_g_fit` object with additional fields `agg_mat`, `norm_params`,
-#'   and `framework = "cs"`.
+#' @return Numeric matrix (n × h) of cross-sectional reconciled forecasts, with
+#'   `attr(., "FoReco")` of class `foreco_info`. Use [extract_reconciled_ml]
+#'   to access the underlying `rml_g_fit`.
 #' @examples
 #' \dontrun{
 #' agg_mat <- t(c(1, 1))
@@ -652,14 +748,44 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     normalize = c("none", "zscore", "robust"),
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
+                    sntz = FALSE, round = FALSE,
+                    method = c("bu", "rec"),
+                    comb = "ols",
+                    res = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
                     batch_size = NULL,
                     chunk_strategy = c("sequential", "random"),
                     batch_checkpoint_dir = NULL,
                     nrounds_per_batch = 50L,
+                    level_id = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
+  method <- match.arg(method)
+  if (identical(comb, "insample")) {
+    cli_abort(
+      "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
+      call = NULL
+    )
+  }
+  if (isTRUE(level_id)) {
+    cli_abort(
+      "{.arg level_id} is not applicable to {.fn csrml_g}; the cross-sectional hierarchy has no temporal axis.",
+      call = NULL
+    )
+  }
+  if (missing(base)) {
+    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
+  }
+  base <- as.matrix(base)
+  if (!is.numeric(base)) {
+    cli_abort("{.arg base} must be numeric.", call = NULL)
+  }
+  if (ncol(base) != ncol(hat)) {
+    cli_abort(
+      "{.arg base} must have {ncol(hat)} columns (matching {.arg hat}); got {ncol(base)}.",
+      call = NULL)
+  }
   hat_norm <- hat
   norm_params <- NULL
   if (normalize != "none") {
@@ -685,7 +811,52 @@ csrml_g <- function(base, hat, obs, agg_mat,
   fit_obj$agg_mat     <- agg_mat
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "cs"
-  fit_obj
+  base_features <- apply_norm_params(base, fit_obj$norm_params)
+  bts_vec  <- predict(fit_obj, newdata = base_features)
+  h        <- nrow(base)
+  nb       <- length(fit_obj$series_id_levels)
+  bts_mat  <- matrix(bts_vec, nrow = h, ncol = nb)
+  if (method == "rec") {
+    valid_combs_cs <- c("ols", "shr", "sam")
+    if (!comb %in% valid_combs_cs)
+      cli_abort(
+        "comb='{comb}' is not supported by FoReco::csrec; use one of: {.val {valid_combs_cs}}.",
+        call = NULL
+      )
+    needs_res <- comb %in% c("shr", "sam")
+    res_cs <- if (!is.null(res)) {
+      as.matrix(res)
+    } else if (needs_res) {
+      # compute_rec_residuals returns T_valid × nb (bottom-level only);
+      # expand to T_valid × n via csbu so csrec gets full N×n residual matrix
+      res_bt <- compute_rec_residuals(fit_obj)
+      res_full <- unclass(FoReco::csbu(res_bt, agg_mat = fit_obj$agg_mat))
+      attr(res_full, "FoReco") <- NULL
+      res_full
+    } else {
+      NULL
+    }
+    # csrec requires h × n (all series); build it from ML-corrected bottom via csbu
+    base_full_cs <- unclass(FoReco::csbu(bts_mat, agg_mat = fit_obj$agg_mat))
+    attr(base_full_cs, "FoReco") <- NULL
+    reco_mat <- FoReco::csrec(
+      base     = base_full_cs,
+      agg_mat  = fit_obj$agg_mat,
+      cons_mat = NULL,
+      comb     = comb,
+      res      = res_cs
+    )
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Cross-sectional",
+      forecast_horizon = h, rfun = "csrml_g", ml = approach
+    ))
+    return(reco_mat)
+  }
+  reco_mat <- FoReco::csbu(bts_mat, agg_mat = fit_obj$agg_mat, sntz = sntz, round = round)
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit = fit_obj, framework = "Cross-sectional",
+    forecast_horizon = h, rfun = "csrml_g", ml = approach))
+  reco_mat
 }
 
 #' Temporal reconciliation with a global ML model
@@ -710,6 +881,19 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #'   [normalize_stack].
 #' @param params named list of backend hyperparameters.
 #' @param seed integer for reproducibility.
+#' @param sntz Logical. If `TRUE`, set negative reconciled values to zero
+#'   (non-negative reconciliation). Default `FALSE`.
+#' @param round Logical. If `TRUE`, round reconciled values to the number of
+#'   decimal places of the base forecasts. Passed to `FoReco::tebu`. Default `FALSE`.
+#' @param tew Character. Temporal aggregation weighting passed to `FoReco::tebu`.
+#'   Default `"sum"`.
+#' @param method Character. `"bu"` (default) for bottom-up reconciliation, or
+#'   `"rec"` for FoReco optimal combination via [FoReco::terec].
+#' @param comb Character; combination method passed to the FoReco reconciliation
+#'   function when `method = "rec"`. Default `"ols"`. See FoReco documentation for
+#'   valid values; supported values with internal residuals vary by framework.
+#' @param res Optional numeric matrix of pre-computed residuals for `method = "rec"`.
+#'   If `NULL` (default), residuals are computed internally from the validation split.
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
@@ -720,19 +904,31 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #' @param batch_checkpoint_dir character path for batch model checkpoints.
 #'   `NULL` disables.
 #' @param nrounds_per_batch integer; boosting rounds added per batch. Default 50.
+#' @param level_id Logical (default `FALSE`). If `TRUE`, appends an ordered-integer
+#'   temporal-aggregation-level feature to the stacked training matrix.
+#'   `level_id = 1` = finest granularity; `level_id = max` = coarsest.
+#'   Requires the level structure to be derivable from `agg_order`.
 #' @param ... passed to [rml_g].
-#' @return `rml_g_fit` object with additional fields `agg_order`, `norm_params`,
-#'   and `framework = "te"`.
+#' @return Named numeric vector matching `FoReco::tebu()` output (length `h × kt`
+#'   where `kt = sum(max(agg_order)/agg_order)`; names like `"k-<order> h-<horizon>"`)
+#'   with `attr(., "FoReco")` of class `foreco_info`. Use [extract_reconciled_ml]
+#'   to access the underlying `rml_g_fit`.
 #' @examples
 #' \dontrun{
 #' agg_order <- c(4L, 2L, 1L)  # annual, semi-annual, quarterly
-#' n_levels <- sum(agg_order)
-#' N_hat <- 40; h <- 1
-#' hat <- matrix(rnorm(n_levels * N_hat), N_hat, n_levels)
-#' obs <- matrix(rnorm(N_hat), N_hat, 1L)  # one bottom-level series
-#' base <- matrix(rnorm(n_levels * h), h, n_levels)
+#' m <- max(agg_order)
+#' kt <- sum(m / agg_order)
+#' T_obs <- 60L; h <- 2L
+#' hat <- matrix(rnorm(kt * T_obs), T_obs, kt)
+#' obs <- matrix(rnorm(T_obs), T_obs, 1L)  # one bottom-level series
+#' base <- matrix(rnorm(h * m * kt), h * m, kt)
+#' r <- terml_g(base = base, hat = hat, obs = obs,
+#'              agg_order = agg_order, approach = "lightgbm", seed = 1L)
+#'
+#' # Enable level_id for stronger per-level corrections
 #' fit <- terml_g(base = base, hat = hat, obs = obs,
-#'                agg_order = agg_order, approach = "lightgbm", seed = 1L)
+#'                agg_order = c(4L, 2L, 1L),
+#'                level_id = TRUE, seed = 1L)
 #' }
 #' @export
 terml_g <- function(base, hat, obs, agg_order,
@@ -740,14 +936,49 @@ terml_g <- function(base, hat, obs, agg_order,
                     normalize = c("none", "zscore", "robust"),
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
+                    sntz = FALSE, round = FALSE, tew = "sum",
+                    method = c("bu", "rec"),
+                    comb = "ols",
+                    res = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
                     batch_size = NULL,
                     chunk_strategy = c("sequential", "random"),
                     batch_checkpoint_dir = NULL,
                     nrounds_per_batch = 50L,
+                    level_id = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
+  method <- match.arg(method)
+  if (identical(comb, "insample")) {
+    cli_abort(
+      "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
+      call = NULL
+    )
+  }
+  if (missing(base)) {
+    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
+  }
+  base <- as.matrix(base)
+  if (!is.numeric(base)) {
+    cli_abort("{.arg base} must be numeric.", call = NULL)
+  }
+  if (ncol(obs) != 1L) {
+    cli_abort(
+      "{.arg obs} for terml_g must have exactly 1 column (single bottom-level temporal series).",
+      call = NULL)
+  }
+  if (ncol(base) != ncol(hat)) {
+    cli_abort(
+      "{.arg base} must have {ncol(hat)} columns (matching {.arg hat}); got {ncol(base)}.",
+      call = NULL)
+  }
+  m <- max(agg_order)
+  if (nrow(base) %% m != 0) {
+    cli_abort(
+      "{.arg base} must have rows divisible by max(agg_order) = {m}; got {nrow(base)}.",
+      call = NULL)
+  }
   hat_norm <- hat
   norm_params <- NULL
   if (normalize != "none") {
@@ -763,17 +994,49 @@ terml_g <- function(base, hat, obs, agg_order,
                        batch_size = batch_size,
                        chunk_strategy = chunk_strategy,
                        batch_checkpoint_dir = batch_checkpoint_dir,
-                       nrounds_per_batch = nrounds_per_batch, ...)
+                       nrounds_per_batch = nrounds_per_batch,
+                       level_id = level_id, kset = agg_order, ...)
   } else {
     rml_g(approach = approach, hat = hat_norm, obs = obs,
           params = params, seed = seed,
           early_stopping_rounds = early_stopping_rounds,
-          validation_split = validation_split, ...)
+          validation_split = validation_split,
+          level_id = level_id, kset = agg_order, ...)
   }
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "te"
-  fit_obj
+  base_features <- apply_norm_params(base, fit_obj$norm_params)
+  bts_vec <- predict(fit_obj, newdata = base_features)
+  if (method == "rec") {
+    if (!identical(comb, "ols"))
+      cli_abort(
+        paste0("comb='{comb}' with method='rec' for terml_g requires full-sample residuals;",
+               " only comb='ols' is supported. Use method='bu' for other comb values."),
+        call = NULL
+      )
+    # terec requires h*(k*+m) vector; expand bts_vec via tebu first
+    base_full_te <- FoReco::tebu(bts_vec, agg_order = fit_obj$agg_order, tew = tew)
+    reco_vec <- FoReco::terec(
+      base      = base_full_te,
+      agg_order = fit_obj$agg_order,
+      tew       = tew,
+      comb      = comb,
+      res       = NULL
+    )
+    attr(reco_vec, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Temporal",
+      forecast_horizon = nrow(base) / m, rfun = "terml_g", ml = approach
+    ))
+    return(reco_vec)
+  }
+  # tebu expects a vector of length h_hf = h * m (nb=1 invariant for terml_g)
+  reco_vec <- FoReco::tebu(bts_vec, agg_order = fit_obj$agg_order, tew = tew, sntz = sntz, round = round)
+  attr(reco_vec, "FoReco") <- new_foreco_info(list(
+    fit = fit_obj, framework = "Temporal",
+    forecast_horizon = nrow(base) / m,
+    rfun = "terml_g", ml = approach))
+  reco_vec
 }
 
 #' Cross-temporal reconciliation with a global ML model
@@ -798,6 +1061,19 @@ terml_g <- function(base, hat, obs, agg_order,
 #'   [normalize_stack].
 #' @param params named list of backend hyperparameters.
 #' @param seed integer for reproducibility.
+#' @param sntz Logical. If `TRUE`, set negative reconciled values to zero
+#'   (non-negative reconciliation). Default `FALSE`.
+#' @param round Logical. If `TRUE`, round reconciled values to the number of
+#'   decimal places of the base forecasts. Passed to `FoReco::ctbu`. Default `FALSE`.
+#' @param tew Character. Temporal aggregation weighting passed to `FoReco::ctbu`.
+#'   Default `"sum"`.
+#' @param method Character. `"bu"` (default) for bottom-up reconciliation, or
+#'   `"rec"` for FoReco optimal combination via [FoReco::ctrec].
+#' @param comb Character; combination method passed to the FoReco reconciliation
+#'   function when `method = "rec"`. Default `"ols"`. See FoReco documentation for
+#'   valid values; supported values with internal residuals vary by framework.
+#' @param res Optional numeric matrix of pre-computed residuals for `method = "rec"`.
+#'   If `NULL` (default), residuals are computed internally from the validation split.
 #' @param early_stopping_rounds integer; `0` disables early stopping.
 #' @param validation_split fraction of stacked rows reserved for validation
 #'   (`0` disables).
@@ -808,9 +1084,14 @@ terml_g <- function(base, hat, obs, agg_order,
 #' @param batch_checkpoint_dir character path for batch model checkpoints.
 #'   `NULL` disables.
 #' @param nrounds_per_batch integer; boosting rounds added per batch. Default 50.
+#' @param level_id Logical (default `FALSE`). If `TRUE`, appends an ordered-integer
+#'   temporal-aggregation-level feature to the stacked training matrix.
+#'   `level_id = 1` = finest granularity; `level_id = max` = coarsest.
+#'   Requires the level structure to be derivable from `agg_order`.
 #' @param ... passed to [rml_g].
-#' @return `rml_g_fit` object with additional fields `agg_mat`, `agg_order`,
-#'   `norm_params`, and `framework = "ct"`.
+#' @return Numeric matrix (`n × (h × kt)` where `kt = sum(max(agg_order)/agg_order)`)
+#'   of cross-temporal reconciled forecasts, with `attr(., "FoReco")` of class
+#'   `foreco_info`. Use [extract_reconciled_ml] to access the underlying `rml_g_fit`.
 #' @examples
 #' \dontrun{
 #' agg_mat <- t(c(1, 1))
@@ -824,9 +1105,14 @@ terml_g <- function(base, hat, obs, agg_order,
 #' obs <- matrix(rnorm(p * N_hat), N_hat, p)
 #' colnames(obs) <- colnames(agg_mat)
 #' base <- matrix(rnorm(n_cs * n_te * h), h, n_cs * n_te)
+#' r <- ctrml_g(base = base, hat = hat, obs = obs,
+#'              agg_mat = agg_mat, agg_order = agg_order,
+#'              approach = "lightgbm", seed = 1L)
+#'
+#' # Enable level_id for stronger per-level corrections
 #' fit <- ctrml_g(base = base, hat = hat, obs = obs,
 #'                agg_mat = agg_mat, agg_order = agg_order,
-#'                approach = "lightgbm", seed = 1L)
+#'                level_id = TRUE, seed = 1L)
 #' }
 #' @export
 ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
@@ -834,14 +1120,44 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     normalize = c("none", "zscore", "robust"),
                     scale_fn = "gmd",
                     params = NULL, seed = NULL,
+                    sntz = FALSE, round = FALSE, tew = "sum",
+                    method = c("bu", "rec"),
+                    comb = "ols",
+                    res = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
                     batch_size = NULL,
                     chunk_strategy = c("sequential", "random"),
                     batch_checkpoint_dir = NULL,
                     nrounds_per_batch = 50L,
+                    level_id = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
+  method <- match.arg(method)
+  if (identical(comb, "insample")) {
+    cli_abort(
+      "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
+      call = NULL
+    )
+  }
+  if (missing(base)) {
+    cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
+  }
+  base <- as.matrix(base)
+  if (!is.numeric(base)) {
+    cli_abort("{.arg base} must be numeric.", call = NULL)
+  }
+  if (ncol(base) != ncol(hat)) {
+    cli_abort(
+      "{.arg base} must have {ncol(hat)} columns (matching {.arg hat}); got {ncol(base)}.",
+      call = NULL)
+  }
+  m <- max(agg_order)
+  if (nrow(base) %% m != 0) {
+    cli_abort(
+      "{.arg base} must have rows divisible by max(agg_order) = {m}; got {nrow(base)}.",
+      call = NULL)
+  }
   hat_norm <- hat
   norm_params <- NULL
   if (normalize != "none") {
@@ -857,18 +1173,63 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                        batch_size = batch_size,
                        chunk_strategy = chunk_strategy,
                        batch_checkpoint_dir = batch_checkpoint_dir,
-                       nrounds_per_batch = nrounds_per_batch, ...)
+                       nrounds_per_batch = nrounds_per_batch,
+                       level_id = level_id, kset = agg_order, ...)
   } else {
     rml_g(approach = approach, hat = hat_norm, obs = obs,
           params = params, seed = seed,
           early_stopping_rounds = early_stopping_rounds,
-          validation_split = validation_split, ...)
+          validation_split = validation_split,
+          level_id = level_id, kset = agg_order, ...)
   }
   fit_obj$agg_mat     <- agg_mat
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
   fit_obj$framework   <- "ct"
-  fit_obj
+  base_features <- apply_norm_params(base, fit_obj$norm_params)
+  bts_vec <- predict(fit_obj, newdata = base_features)
+  h_hf <- nrow(base)
+  nb   <- length(fit_obj$series_id_levels)
+  bts_mat  <- matrix(bts_vec, nrow = h_hf, ncol = nb)
+  if (method == "rec") {
+    if (!identical(comb, "ols"))
+      cli_abort(
+        paste0("comb='{comb}' with method='rec' for ctrml_g requires full-sample residuals;",
+               " only comb='ols' is supported. Use method='bu' for other comb values."),
+        call = NULL
+      )
+    # ctrec requires n × h*(k*+m); expand via ctbu first to get full hierarchy
+    base_full_ct_raw <- FoReco::ctbu(t(bts_mat),
+                                     agg_mat   = fit_obj$agg_mat,
+                                     agg_order = fit_obj$agg_order,
+                                     tew       = tew)
+    base_full_ct <- unclass(base_full_ct_raw)
+    attr(base_full_ct, "FoReco") <- NULL
+    reco_mat <- FoReco::ctrec(
+      base      = base_full_ct,
+      agg_mat   = fit_obj$agg_mat,
+      cons_mat  = NULL,
+      agg_order = fit_obj$agg_order,
+      tew       = tew,
+      comb      = comb,
+      res       = NULL
+    )
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Cross-temporal",
+      forecast_horizon = h_hf / m, rfun = "ctrml_g", ml = approach
+    ))
+    return(reco_mat)
+  }
+  # ctbu expects nb × h_hf — transpose
+  reco_mat <- FoReco::ctbu(t(bts_mat),
+                           agg_mat = fit_obj$agg_mat,
+                           agg_order = fit_obj$agg_order,
+                           tew = tew, sntz = sntz, round = round)
+  attr(reco_mat, "FoReco") <- new_foreco_info(list(
+    fit = fit_obj, framework = "Cross-temporal",
+    forecast_horizon = h_hf / m,
+    rfun = "ctrml_g", ml = approach))
+  reco_mat
 }
 
 #' @export
@@ -876,6 +1237,8 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
 rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
                            early_stopping_rounds = 0L,
                            validation_split = 0,
+                           level_id = FALSE,
+                           kset = NULL,
                            ...) {
   if (!requireNamespace("catboost", quietly = TRUE)) {
     cli_abort(
@@ -885,6 +1248,8 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
   }
 
   stack <- .stack_series(hat, obs,
+                         kset = kset,
+                         level_id = level_id,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -934,7 +1299,12 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
       approach           = "catboost",
       series_id_levels   = stack$series_id_levels,
       feature_importance = feature_importance,
-      ncol_hat           = ncol(hat)
+      ncol_hat           = ncol(stack$X_stacked),
+      use_level_id       = isTRUE(level_id),
+      kset               = kset,
+      valid_idx          = stack$valid_idx,
+      X_valid            = stack$X_stacked[stack$valid_idx, , drop = FALSE],
+      y_valid            = stack$y_stacked[stack$valid_idx]
     ),
     class = "rml_g_fit"
   )
@@ -967,6 +1337,33 @@ predict.rml_g_fit <- function(object, newdata, series_id = NULL, ...) {
     cli_abort("{.arg newdata} is required.", call = NULL)
   }
   newdata <- as.matrix(newdata)
+
+  # --- level_id reconstruction at predict time --------------------------------
+  # When the model was trained with level_id=TRUE, each prediction row must
+  # also carry the corresponding temporal-aggregation-level integer column.
+  # Rows cycle through the same positional pattern as training.
+  if (isTRUE(object$use_level_id) && !is.null(object$kset)) {
+    kset        <- object$kset
+    sorted_kset <- sort(kset)                               # must match train
+    m           <- max(kset)
+    k_to_level  <- setNames(seq_along(sorted_kset), as.character(sorted_kset))
+    n_pred      <- NROW(newdata)
+    cycle_pos   <- ((seq_len(n_pred) - 1L) %% m) + 1L
+    # For each position, find which kset value "owns" it.
+    # Identical predicate to .stack_series(): (pos-1) %% k == 0 means k STARTS here.
+    level_at_pos <- vapply(cycle_pos, function(cp) {
+      starts <- kset[(cp - 1L) %% kset == 0L]
+      k_to_level[[as.character(max(starts))]]
+    }, integer(1L))
+    newdata <- cbind(newdata, level_id_col = level_at_pos)
+  }
+
+  if (!is.null(object$ncol_hat) && ncol(newdata) != object$ncol_hat) {
+    cli_abort(
+      "{.arg newdata} must have {object$ncol_hat} columns (matching training {.arg hat}); got {ncol(newdata)}.",
+      call = NULL
+    )
+  }
 
   # --- series_id resolution -------------------------------------------------
   if (is.null(series_id)) {

@@ -1,6 +1,6 @@
 # T7.4 — chunked incremental training tests (G.2, reduced scope: 4 tests).
 
-make_chunk_fixture <- function(p = 10L, T_obs = 20L, ncol_hat = 5L) {
+make_chunk_fixture <- function(p = 10L, T_obs = 20L, ncol_hat = 5L, h = 2L) {
   set.seed(7)
   obs <- matrix(rnorm(T_obs * p), T_obs, p,
                 dimnames = list(NULL, paste0("S", seq_len(p))))
@@ -8,12 +8,13 @@ make_chunk_fixture <- function(p = 10L, T_obs = 20L, ncol_hat = 5L) {
                 dimnames = list(NULL, paste0("f", seq_len(ncol_hat))))
   agg_mat <- matrix(1, 1, p)
   rownames(agg_mat) <- "G1"
-  base <- matrix(rnorm(p + 1), p + 1, 1)
-  rownames(base) <- c("G1", paste0("S", seq_len(p)))
+  # base: h forecast horizons x ncol_hat features (must match hat ncol)
+  base <- matrix(rnorm(h * ncol_hat), h, ncol_hat,
+                 dimnames = list(NULL, paste0("f", seq_len(ncol_hat))))
   list(obs = obs, hat = hat, agg_mat = agg_mat, base = base, p = p)
 }
 
-test_that("(a) lightgbm single-batch path matches non-chunked rml_g_fit class", {
+test_that("(a) lightgbm single-batch path produces rml_g_fit embedded in FoReco attr", {
   skip_if_not_installed("lightgbm")
   fx <- make_chunk_fixture(p = 6L)
   r1 <- csrml_g(base = fx$base, hat = fx$hat, obs = fx$obs,
@@ -23,8 +24,9 @@ test_that("(a) lightgbm single-batch path matches non-chunked rml_g_fit class", 
                 agg_mat = fx$agg_mat[, 1:6, drop = FALSE],
                 approach = "lightgbm", seed = 42L,
                 batch_size = fx$p)  # single batch → delegates to rml_g
-  expect_s3_class(r1, "rml_g_fit")
-  expect_s3_class(r2, "rml_g_fit")
+  # csrml_g returns the reconciled matrix; the rml_g_fit is in the FoReco attr
+  expect_s3_class(attr(r1, "FoReco")$fit, "rml_g_fit")
+  expect_s3_class(attr(r2, "FoReco")$fit, "rml_g_fit")
 })
 
 test_that("(b) .auto_batch_size resolves to integer in [1, p]", {
@@ -59,5 +61,7 @@ test_that("(d) chunk_strategy='sequential' batch_indices reproducible", {
   r2 <- csrml_g(base = fx$base, hat = fx$hat, obs = fx$obs, agg_mat = agg6,
                 approach = "lightgbm", seed = 1L, batch_size = 3L,
                 chunk_strategy = "sequential")
-  expect_equal(r1$batch_indices, r2$batch_indices)
+  # csrml_g returns the reconciled matrix; batch_indices is on the embedded fit
+  expect_equal(attr(r1, "FoReco")$fit$batch_indices,
+               attr(r2, "FoReco")$fit$batch_indices)
 })

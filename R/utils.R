@@ -55,6 +55,11 @@
 #'
 #' @export
 extract_reconciled_ml <- function(reco) {
+  foreco_attr <- attr(reco, "FoReco")
+  if (!is.null(foreco_attr) && inherits(foreco_attr$fit, "rml_g_fit")) {
+    return(foreco_attr$fit)
+  }
+
   if (inherits(reco, "rml_fit")) {
     cli_inform(
       "Input {.arg reco} is already an {.cls rml_fit}; returning it unchanged."
@@ -479,6 +484,15 @@ normalize_stack <- function(X, method = c("zscore", "robust"), scale_fn = "gmd")
   list(X_norm = X_norm, center = center, scale = scale)
 }
 
+apply_norm_params <- function(X_new, norm_params) {
+  if (is.null(norm_params)) return(X_new)
+  sc <- norm_params$scale
+  sc[!is.finite(sc) | sc < .Machine$double.eps] <- 1
+  X_new <- sweep(X_new, 2, norm_params$center, "-")
+  X_new <- sweep(X_new, 2, sc, "/")
+  X_new
+}
+
 # Returns a function that computes the robust scale for a single column vector.
 .robscale_fn <- function(scale_fn) {
   switch(scale_fn,
@@ -516,4 +530,23 @@ normalize_stack <- function(X, method = c("zscore", "robust"), scale_fn = "gmd")
       sd(x, na.rm = na.rm) / (1 - 1 / (4 * n))  # c4 bias correction
     }
   )
+}
+
+# Compute validation residuals from a fitted rml_g_fit object.
+# Returns a T_valid × p matrix (time × bottom-series) of residuals.
+# Aborts when valid_idx is empty (validation_split was 0).
+compute_rec_residuals <- function(fit_obj) {
+  if (length(fit_obj$valid_idx) == 0L) {
+    cli_abort(
+      paste0("method = 'rec' with comb requiring residuals needs",
+             " validation_split > 0."),
+      call = NULL
+    )
+  }
+  preds     <- predict(fit_obj, newdata = fit_obj$X_valid)
+  resid_vec <- fit_obj$y_valid - preds
+  p         <- length(fit_obj$series_id_levels)
+  T_valid   <- length(resid_vec) / p
+  matrix(resid_vec, nrow = T_valid, ncol = p,
+         dimnames = list(NULL, fit_obj$series_id_levels))
 }

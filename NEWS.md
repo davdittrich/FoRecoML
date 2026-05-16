@@ -3,13 +3,33 @@
 ## New features
 
 * New `csrml_g()`, `terml_g()`, `ctrml_g()` wrappers for global ML
-  reconciliation. Return `rml_g_fit` objects; use `predict.rml_g_fit()` for
-  reconciled forecasts. Supports `normalize = c("none","zscore","robust")`
+  reconciliation. `csrml_g()` and `ctrml_g()` return reconciled forecast
+  matrices with `attr(., 'FoReco')`. `terml_g()` returns a named numeric vector
+  matching `FoReco::tebu()` output. Access the underlying fit via
+  `extract_reconciled_ml(result)`. Supports `normalize = c("none","zscore","robust")`
   pre-normalization of the shared feature matrix before fitting.
 
 * New `normalize_stack()` function for pre-normalizing stacked feature matrices
   before global ML training. Supports zscore and robust normalization with 6
   scale estimators: gmd, mad_scaled, qn (robscale), sn (robscale), iqr_scaled, sd_c4.
+
+* `terml_g()` and `ctrml_g()` accept `level_id = TRUE` (default `FALSE`) to add an ordered-integer temporal-aggregation-level feature to the stacked training matrix (1 = finest granularity, max = coarsest). Improves global ML correction accuracy on hierarchies with strong level-specific variance. `csrml_g()` rejects this argument with an informative error. See the "Feature engineering for global ML" article.
+
+* `csrml_g()`, `terml_g()`, and `ctrml_g()` accept `method = "rec"` to use
+  FoReco's optimal combination reconciliation (`csrec`, `terec`, `ctrec`)
+  instead of bottom-up. The `comb = "ols"` (default) works without residuals;
+  `comb = "shr"` / `"sam"` for `csrml_g()` use internally-computed validation
+  residuals (requires `validation_split > 0`). The `res = NULL` argument allows
+  an optional pre-computed residual matrix override.
+
+## Bug fixes
+
+* `csrml_g()`, `terml_g()`, `ctrml_g()` no longer silently ignore the `base`
+  argument. Previously they returned bare `rml_g_fit` objects; now they perform
+  the full fit + predict + reconcile pipeline.
+
+* `sntz`, `round` (all three wrappers) and `tew` (terml_g/ctrml_g) parameters
+  restored for parity with the per-series csrml/terml/ctrml functions.
 
 ## Breaking changes
 
