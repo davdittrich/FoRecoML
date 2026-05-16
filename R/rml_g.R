@@ -1188,16 +1188,16 @@ predict.rml_g_fit <- function(object, newdata, series_id = NULL, ...) {
   # Rows cycle through the same positional pattern as training.
   if (isTRUE(object$use_level_id) && !is.null(object$kset)) {
     kset        <- object$kset
-    sorted_kset <- sort(unique(kset))
+    sorted_kset <- sort(kset)                               # must match train
     m           <- max(kset)
     k_to_level  <- setNames(seq_along(sorted_kset), as.character(sorted_kset))
     n_pred      <- NROW(newdata)
     cycle_pos   <- ((seq_len(n_pred) - 1L) %% m) + 1L
     # For each position, find which kset value "owns" it.
+    # Identical predicate to .stack_series(): (pos-1) %% k == 0 means k STARTS here.
     level_at_pos <- vapply(cycle_pos, function(cp) {
-      eligible <- kset[cp %% kset == 0L]
-      if (length(eligible) == 0L) eligible <- min(kset)
-      k_to_level[[as.character(max(eligible))]]
+      starts <- kset[(cp - 1L) %% kset == 0L]
+      k_to_level[[as.character(max(starts))]]
     }, integer(1L))
     newdata <- cbind(newdata, level_id_col = level_at_pos)
   }
