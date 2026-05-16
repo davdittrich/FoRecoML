@@ -849,6 +849,11 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #' base <- matrix(rnorm(h * m * kt), h * m, kt)
 #' r <- terml_g(base = base, hat = hat, obs = obs,
 #'              agg_order = agg_order, approach = "lightgbm", seed = 1L)
+#'
+#' # Enable level_id for stronger per-level corrections
+#' fit <- terml_g(base = base, hat = hat, obs = obs,
+#'                agg_order = c(4L, 2L, 1L),
+#'                level_id = TRUE, seed = 1L)
 #' }
 #' @export
 terml_g <- function(base, hat, obs, agg_order,
@@ -989,6 +994,11 @@ terml_g <- function(base, hat, obs, agg_order,
 #' r <- ctrml_g(base = base, hat = hat, obs = obs,
 #'              agg_mat = agg_mat, agg_order = agg_order,
 #'              approach = "lightgbm", seed = 1L)
+#'
+#' # Enable level_id for stronger per-level corrections
+#' fit <- ctrml_g(base = base, hat = hat, obs = obs,
+#'                agg_mat = agg_mat, agg_order = agg_order,
+#'                level_id = TRUE, seed = 1L)
 #' }
 #' @export
 ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
