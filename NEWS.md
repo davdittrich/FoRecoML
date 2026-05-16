@@ -2,6 +2,13 @@
 
 ## New features
 
+* `csrml_g()`, `terml_g()`, and `ctrml_g()` accept `nonneg_method` to select the
+  non-negative reconciliation approach. `"sntz"` (default, near-optimal per
+  Girolimetto 2025) clips negatives after bottom-up. `"bpv"`, `"nfca"`, `"nnic"`,
+  `"osqp"` use FoReco's projection-based non-negative methods (`nn=` argument in
+  `csrec`/`terec`/`ctrec`). On sparse hierarchies with >30% structural-zero bottom
+  series, degenerate face risk may arise — a warning fires automatically.
+
 * New `csrml_g()`, `terml_g()`, `ctrml_g()` wrappers for global ML
   reconciliation. `csrml_g()` and `ctrml_g()` return reconciled forecast
   matrices with `attr(., 'FoReco')`. `terml_g()` returns a named numeric vector

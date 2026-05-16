@@ -107,3 +107,31 @@ result_shr <- csrml_g(base = base, hat = hat, obs = obs,
 For `terml_g()` and `ctrml_g()`, only `comb = "ols"` is supported with
 `method = "rec"` (other combination methods require full-sample residuals not
 available from the validation split).
+
+## Non-negative reconciliation (`nonneg_method`)
+
+By default, `nonneg_method = "sntz"` clips negative reconciled forecasts to zero
+after bottom-up. This is near-optimal for most cases (Girolimetto 2025,
+*Forecasting* 7(4):64).
+
+Projection-based alternatives use FoReco's `nn=` argument:
+
+```{r nonneg, eval = FALSE}
+# Block pivoting (bpv) — faster, exact non-negativity
+result_bpv <- csrml_g(base = base, hat = hat, obs = obs,
+                       agg_mat = agg_mat, nonneg_method = "bpv")
+
+# OSQP solver — general quadratic programming
+result_osqp <- csrml_g(base = base, hat = hat, obs = obs,
+                        agg_mat = agg_mat, nonneg_method = "osqp")
+```
+
+**Sparse hierarchy caveat:** On hierarchies where >30% of bottom-level series have
+structural zeros (administrative suppression, not measurement zeros), the projection
+surface can become ill-conditioned. `nonneg_method = "sntz"` avoids this entirely.
+A warning fires automatically when >30% of predictions are negative and a projection
+method is selected.
+
+**Citation:** Girolimetto, D. (2025). Non-negative forecast reconciliation.
+*Forecasting*, 7(4), 64. doi:10.3390/forecast7040064
+
