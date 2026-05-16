@@ -531,3 +531,22 @@ apply_norm_params <- function(X_new, norm_params) {
     }
   )
 }
+
+# Compute validation residuals from a fitted rml_g_fit object.
+# Returns a T_valid × p matrix (time × bottom-series) of residuals.
+# Aborts when valid_idx is empty (validation_split was 0).
+compute_rec_residuals <- function(fit_obj) {
+  if (length(fit_obj$valid_idx) == 0L) {
+    cli_abort(
+      paste0("method = 'rec' with comb requiring residuals needs",
+             " validation_split > 0."),
+      call = NULL
+    )
+  }
+  preds     <- predict(fit_obj, newdata = fit_obj$X_valid)
+  resid_vec <- fit_obj$y_valid - preds
+  p         <- length(fit_obj$series_id_levels)
+  T_valid   <- length(resid_vec) / p
+  matrix(resid_vec, nrow = T_valid, ncol = p,
+         dimnames = list(NULL, fit_obj$series_id_levels))
+}
