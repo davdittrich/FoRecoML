@@ -674,7 +674,7 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
     list(
       fit                = prev_model,
       approach           = approach,
-      series_id_levels   = colnames(obs),
+      series_id_levels   = sort(unique(as.character(colnames(obs)))),
       feature_importance = NULL,
       ncol_hat           = ncol_hat,
       use_level_id       = FALSE,
