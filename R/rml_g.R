@@ -768,9 +768,6 @@ csrml_g <- function(base, hat, obs, agg_mat,
       call = NULL
     )
   }
-  if (method == "rec") {
-    cli_abort("method='rec' is not yet implemented; see P1.T3.", call = NULL)
-  }
   if (isTRUE(level_id)) {
     cli_abort(
       "{.arg level_id} is not applicable to {.fn csrml_g}; the cross-sectional hierarchy has no temporal axis.",
@@ -819,6 +816,42 @@ csrml_g <- function(base, hat, obs, agg_mat,
   h        <- nrow(base)
   nb       <- length(fit_obj$series_id_levels)
   bts_mat  <- matrix(bts_vec, nrow = h, ncol = nb)
+  if (method == "rec") {
+    valid_combs_cs <- c("ols", "shr", "sam")
+    if (!comb %in% valid_combs_cs)
+      cli_abort(
+        "comb='{comb}' is not supported by FoReco::csrec; use one of: {.val {valid_combs_cs}}.",
+        call = NULL
+      )
+    needs_res <- comb %in% c("shr", "sam")
+    res_cs <- if (!is.null(res)) {
+      as.matrix(res)
+    } else if (needs_res) {
+      # compute_rec_residuals returns T_valid × nb (bottom-level only);
+      # expand to T_valid × n via csbu so csrec gets full N×n residual matrix
+      res_bt <- compute_rec_residuals(fit_obj)
+      res_full <- unclass(FoReco::csbu(res_bt, agg_mat = fit_obj$agg_mat))
+      attr(res_full, "FoReco") <- NULL
+      res_full
+    } else {
+      NULL
+    }
+    # csrec requires h × n (all series); build it from ML-corrected bottom via csbu
+    base_full_cs <- unclass(FoReco::csbu(bts_mat, agg_mat = fit_obj$agg_mat))
+    attr(base_full_cs, "FoReco") <- NULL
+    reco_mat <- FoReco::csrec(
+      base     = base_full_cs,
+      agg_mat  = fit_obj$agg_mat,
+      cons_mat = NULL,
+      comb     = comb,
+      res      = res_cs
+    )
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Cross-sectional",
+      forecast_horizon = h, rfun = "csrml_g", ml = approach
+    ))
+    return(reco_mat)
+  }
   reco_mat <- FoReco::csbu(bts_mat, agg_mat = fit_obj$agg_mat, sntz = sntz, round = round)
   attr(reco_mat, "FoReco") <- new_foreco_info(list(
     fit = fit_obj, framework = "Cross-sectional",
@@ -923,9 +956,6 @@ terml_g <- function(base, hat, obs, agg_order,
       call = NULL
     )
   }
-  if (method == "rec") {
-    cli_abort("method='rec' is not yet implemented; see P1.T3.", call = NULL)
-  }
   if (missing(base)) {
     cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
   }
@@ -978,6 +1008,28 @@ terml_g <- function(base, hat, obs, agg_order,
   fit_obj$framework   <- "te"
   base_features <- apply_norm_params(base, fit_obj$norm_params)
   bts_vec <- predict(fit_obj, newdata = base_features)
+  if (method == "rec") {
+    if (!identical(comb, "ols"))
+      cli_abort(
+        paste0("comb='{comb}' with method='rec' for terml_g requires full-sample residuals;",
+               " only comb='ols' is supported. Use method='bu' for other comb values."),
+        call = NULL
+      )
+    # terec requires h*(k*+m) vector; expand bts_vec via tebu first
+    base_full_te <- FoReco::tebu(bts_vec, agg_order = fit_obj$agg_order, tew = tew)
+    reco_vec <- FoReco::terec(
+      base      = base_full_te,
+      agg_order = fit_obj$agg_order,
+      tew       = tew,
+      comb      = comb,
+      res       = NULL
+    )
+    attr(reco_vec, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Temporal",
+      forecast_horizon = nrow(base) / m, rfun = "terml_g", ml = approach
+    ))
+    return(reco_vec)
+  }
   # tebu expects a vector of length h_hf = h * m (nb=1 invariant for terml_g)
   reco_vec <- FoReco::tebu(bts_vec, agg_order = fit_obj$agg_order, tew = tew, sntz = sntz, round = round)
   attr(reco_vec, "FoReco") <- new_foreco_info(list(
@@ -1088,9 +1140,6 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
       call = NULL
     )
   }
-  if (method == "rec") {
-    cli_abort("method='rec' is not yet implemented; see P1.T3.", call = NULL)
-  }
   if (missing(base)) {
     cli_abort("Argument {.arg base} is missing, with no default.", call = NULL)
   }
@@ -1142,6 +1191,35 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
   h_hf <- nrow(base)
   nb   <- length(fit_obj$series_id_levels)
   bts_mat  <- matrix(bts_vec, nrow = h_hf, ncol = nb)
+  if (method == "rec") {
+    if (!identical(comb, "ols"))
+      cli_abort(
+        paste0("comb='{comb}' with method='rec' for ctrml_g requires full-sample residuals;",
+               " only comb='ols' is supported. Use method='bu' for other comb values."),
+        call = NULL
+      )
+    # ctrec requires n × h*(k*+m); expand via ctbu first to get full hierarchy
+    base_full_ct_raw <- FoReco::ctbu(t(bts_mat),
+                                     agg_mat   = fit_obj$agg_mat,
+                                     agg_order = fit_obj$agg_order,
+                                     tew       = tew)
+    base_full_ct <- unclass(base_full_ct_raw)
+    attr(base_full_ct, "FoReco") <- NULL
+    reco_mat <- FoReco::ctrec(
+      base      = base_full_ct,
+      agg_mat   = fit_obj$agg_mat,
+      cons_mat  = NULL,
+      agg_order = fit_obj$agg_order,
+      tew       = tew,
+      comb      = comb,
+      res       = NULL
+    )
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Cross-temporal",
+      forecast_horizon = h_hf / m, rfun = "ctrml_g", ml = approach
+    ))
+    return(reco_mat)
+  }
   # ctbu expects nb × h_hf — transpose
   reco_mat <- FoReco::ctbu(t(bts_mat),
                            agg_mat = fit_obj$agg_mat,
