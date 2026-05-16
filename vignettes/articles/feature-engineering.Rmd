@@ -87,3 +87,23 @@ corresponds to the coarsest aggregation.
 
 The derivation is `rank(match(kset, sort(kset)))`, which assigns rank 1 to the
 smallest `k` value (finest granularity).
+
+## FoReco optimal combination (`method = "rec"`)
+
+The `method = "rec"` argument enables FoReco's linear optimal reconciliation
+(e.g., OLS, shrinkage) instead of bottom-up:
+
+```{r method_rec, eval = FALSE}
+# OLS reconciliation (no residuals needed)
+result_ols <- csrml_g(base = base, hat = hat, obs = obs,
+                      agg_mat = agg_mat, method = "rec", comb = "ols")
+
+# Shrinkage reconciliation (requires validation split)
+result_shr <- csrml_g(base = base, hat = hat, obs = obs,
+                      agg_mat = agg_mat, method = "rec", comb = "shr",
+                      validation_split = 0.2)
+```
+
+For `terml_g()` and `ctrml_g()`, only `comb = "ols"` is supported with
+`method = "rec"` (other combination methods require full-sample residuals not
+available from the validation split).

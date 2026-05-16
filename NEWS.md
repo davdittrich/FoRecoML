@@ -15,6 +15,13 @@
 
 * `terml_g()` and `ctrml_g()` accept `level_id = TRUE` (default `FALSE`) to add an ordered-integer temporal-aggregation-level feature to the stacked training matrix (1 = finest granularity, max = coarsest). Improves global ML correction accuracy on hierarchies with strong level-specific variance. `csrml_g()` rejects this argument with an informative error. See the "Feature engineering for global ML" article.
 
+* `csrml_g()`, `terml_g()`, and `ctrml_g()` accept `method = "rec"` to use
+  FoReco's optimal combination reconciliation (`csrec`, `terec`, `ctrec`)
+  instead of bottom-up. The `comb = "ols"` (default) works without residuals;
+  `comb = "shr"` / `"sam"` for `csrml_g()` use internally-computed validation
+  residuals (requires `validation_split > 0`). The `res = NULL` argument allows
+  an optional pre-computed residual matrix override.
+
 ## Bug fixes
 
 * `csrml_g()`, `terml_g()`, `ctrml_g()` no longer silently ignore the `base`
