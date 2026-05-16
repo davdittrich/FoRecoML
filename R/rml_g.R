@@ -110,7 +110,7 @@
     if (n_valid_total < min_validation_rows) {
       cli_warn(
         c("Validation set has only {n_valid_total} row{?s} (< {min_validation_rows}).",
-          "i" = "Early stopping disabled."),
+          "i" = "Validation data dropped — early stopping and rec-method residuals unavailable."),
         call = NULL
       )
       valid_idx <- integer(0L)
@@ -391,10 +391,11 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
     ranger_params
   ))
 
-  feature_importance <- tryCatch(fit$variable.importance, error = function(e) {
-    cli_warn("feature_importance extraction failed: {conditionMessage(e)}", call = NULL)
-    NULL
-  })
+  # $variable.importance returns NULL (not an error) when importance="none".
+  # tryCatch cannot catch a NULL return; use a direct NULL check instead.
+  feature_importance <- fit$variable.importance
+  if (is.null(feature_importance))
+    cli_warn("feature_importance not available (importance='none'?)", call = NULL)
 
   structure(
     list(

@@ -557,6 +557,17 @@ compute_rec_residuals <- function(fit_obj) {
     cli_abort("Validation residual count {length(resid_vec)} not divisible by p={p}.",
               call = NULL)
   }
-  matrix(resid_vec, nrow = T_valid, ncol = p,
-         dimnames = list(NULL, fit_obj$series_id_levels))
+  # Route each block of residuals to the correct sorted-level column.
+  # valid_idx lapply iterates in series_names (original colnames) order, which may
+  # differ from series_id_levels (sorted) order. Using series_id_int_valid to
+  # assign each block to its correct sorted-index column prevents silent mislabeling
+  # when colnames(obs) are not already alphabetically sorted.
+  resid_mat <- matrix(NA_real_, nrow = T_valid, ncol = p,
+                      dimnames = list(NULL, fit_obj$series_id_levels))
+  for (j in seq_len(p)) {
+    block_rows  <- seq_len(T_valid) + (j - 1L) * T_valid
+    sorted_col  <- fit_obj$series_id_int_valid[block_rows[1L]]
+    resid_mat[, sorted_col] <- resid_vec[block_rows]
+  }
+  resid_mat
 }

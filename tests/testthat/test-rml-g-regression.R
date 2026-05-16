@@ -115,14 +115,14 @@ test_that("B10: cli_abort fires when validation_split too large", {
 
 # -------- T4: S4 structural test --------
 
-test_that("T4: cli_warn present in all 5 feature_importance handlers", {
-  # Verify the fix was applied — structural check on source file
-  # devtools::test() sets cwd to tests/testthat; climb two levels to package root
+test_that("T4: cli_warn present in all 5 feature_importance handler sites", {
   dev_path <- file.path(getwd(), "..", "..", "R", "rml_g.R")
   if (file.exists(dev_path)) {
     src <- readLines(dev_path)
-    n_warn <- sum(grepl("feature_importance extraction failed", src, fixed = TRUE))
-    expect_equal(n_warn, 5L)
+    # Ranger uses a different message (NULL check, not tryCatch) — count both patterns
+    n_warn_try  <- sum(grepl("feature_importance extraction failed", src, fixed = TRUE))
+    n_warn_null <- sum(grepl("feature_importance not available", src, fixed = TRUE))
+    expect_equal(n_warn_try + n_warn_null, 5L)
   } else {
     skip("Not in development tree; skip structural test")
   }
