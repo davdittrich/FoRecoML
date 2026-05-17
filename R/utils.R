@@ -574,3 +574,66 @@ compute_rec_residuals <- function(fit_obj) {
   }
   resid_mat
 }
+
+# Convert FoReco wide CT matrix format to internal stacked representation.
+# hat_wide:  n_series × (n_folds × kt)  — row = series, cols = CT features per fold
+# obs_wide:  n_bottom × T_monthly       — row = bottom series, cols = monthly obs
+# base_wide: n_series × kt              — row = series, cols = CT test features
+# agg_mat:   n_agg × n_bottom           — summation matrix (from cstools/cttools)
+# agg_order: integer vector             — temporal aggregation orders
+#
+# Returns list with X_stacked, y_stacked, series_id_int, series_id_levels,
+# base_tall, n_folds, n_series, n_bottom.
+convert_wide_ct <- function(hat_wide, obs_wide, base_wide, agg_mat, agg_order) {
+  m  <- max(agg_order)
+  kt <- sum(m / agg_order)   # total CT columns per fold
+  n_series <- nrow(hat_wide)
+  n_bottom <- nrow(obs_wide)
+  n_folds  <- ncol(hat_wide) %/% kt
+  T_monthly <- ncol(obs_wide)
+  months_per_fold <- T_monthly %/% n_folds
+
+  if (ncol(hat_wide) != n_folds * kt)
+    cli_abort("`hat_wide` must have ncol = n_folds × kt = {n_folds * kt}; got {ncol(hat_wide)}.", call = NULL)
+  if (ncol(base_wide) != kt)
+    cli_abort("`base_wide` must have ncol = kt = {kt}; got {ncol(base_wide)}.", call = NULL)
+  if (nrow(agg_mat) != n_series - n_bottom)
+    cli_abort("`agg_mat` rows ({nrow(agg_mat)}) must equal n_series - n_bottom = {n_series - n_bottom}.", call = NULL)
+
+  # Derive full observations for all series (upper via aggregation)
+  obs_upper <- agg_mat %*% obs_wide   # n_agg × T_monthly
+  obs_full  <- rbind(obs_upper, obs_wide)  # n_series × T_monthly
+  if (!is.null(rownames(hat_wide))) rownames(obs_full) <- rownames(hat_wide)
+
+  # Series labels (sorted for stable factor coding)
+  snames     <- if (!is.null(rownames(hat_wide))) rownames(hat_wide) else paste0("S", seq_len(n_series))
+  sid_levels <- sort(unique(snames))
+
+  # Build stacked training matrix: one row per (series, fold) pair
+  n_rows  <- n_series * n_folds
+  X_stack <- matrix(0, n_rows, kt)
+  y_stack <- numeric(n_rows)
+  sid_int <- integer(n_rows)
+  row_i   <- 1L
+  for (t in seq_len(n_folds)) {
+    fold_cols   <- ((t - 1L) * kt + 1L):(t * kt)
+    fold_months <- ((t - 1L) * months_per_fold + 1L):(t * months_per_fold)
+    for (s in seq_len(n_series)) {
+      X_stack[row_i, ] <- hat_wide[s, fold_cols]
+      y_stack[row_i]   <- mean(obs_full[s, fold_months])
+      sid_int[row_i]   <- match(snames[s], sid_levels)
+      row_i <- row_i + 1L
+    }
+  }
+
+  list(
+    X_stacked        = X_stack,
+    y_stacked        = y_stack,
+    series_id_int    = sid_int,
+    series_id_levels = sid_levels,
+    n_folds          = n_folds,
+    n_series         = n_series,
+    n_bottom         = n_bottom,
+    base_tall        = base_wide   # n_series × kt — used as newdata in predict step
+  )
+}
