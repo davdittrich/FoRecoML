@@ -1342,6 +1342,11 @@ terml_g <- function(base, hat, obs, agg_order,
 #'   `hat` as `(n_series × n_folds*kt)`, `obs` as `(n_bottom × T_monthly)`, and
 #'   `base` as `(n_series × kt)`; the stacking is handled internally via
 #'   [convert_wide_ct] and a pre-built stack bypasses [.stack_series].
+#' @param cs_level Logical (default `FALSE`). When `TRUE` and
+#'   `input_format = "wide_ct"`, appends a `cs_level` integer column to the
+#'   stacked training matrix: `0L` for upper (aggregate) series, `1L` for bottom
+#'   (leaf) series. Gives tree-based learners an explicit cross-sectional depth
+#'   signal. Requires `input_format = "wide_ct"`; an error is raised otherwise.
 #' @param ... passed to [rml_g].
 #' @return Numeric matrix (`n × (h × kt)` where `kt = sum(max(agg_order)/agg_order)`)
 #'   of cross-temporal reconciled forecasts, with `attr(., "FoReco")` of class
@@ -1389,6 +1394,7 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     nrounds_per_batch = 50L,
                     level_id = FALSE,
                     obs_mask = NULL,
+                    cs_level = FALSE,
                     ...) {
   normalize <- match.arg(normalize)
   method <- match.arg(method)
@@ -1407,6 +1413,13 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
   if (!is.numeric(base)) {
     cli_abort("{.arg base} must be numeric.", call = NULL)
   }
+  if (isTRUE(cs_level) && input_format != "wide_ct") {
+    cli_abort(
+      paste0("cs_level=TRUE requires input_format='wide_ct' ",
+             "(bottom-only stacking makes cs_level information-free in 'tall' mode)."),
+      call = NULL
+    )
+  }
 
   # ── wide_ct dispatch ────────────────────────────────────────────────────────
   # When input_format="wide_ct", hat is (n_series × n_folds*kt) and obs is
@@ -1417,6 +1430,19 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
     wct <- convert_wide_ct(hat_wide = hat, obs_wide = obs,
                            base_wide = base, agg_mat = agg_mat,
                            agg_order = agg_order)
+
+    # cs_level=TRUE: append a cross-sectional depth column (0=upper, 1=bottom).
+    if (isTRUE(cs_level)) {
+      cs_lvl_vec <- compute_cs_level(agg_mat, wct$series_id_levels)
+      cs_col     <- cs_lvl_vec[wct$series_id_int]  # one entry per (series,fold) row
+      wct$X_stacked <- cbind(wct$X_stacked, cs_level = cs_col)
+      # Sync base_tall: append the cs_level for each series row.
+      base_cs_col     <- cs_lvl_vec[match(
+        if (!is.null(rownames(base))) rownames(base) else paste0("S", seq_len(nrow(base))),
+        names(cs_lvl_vec)
+      )]
+      wct$base_tall <- cbind(wct$base_tall, cs_level = base_cs_col)
+    }
 
     n_rows <- nrow(wct$X_stacked)
 
