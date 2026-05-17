@@ -208,6 +208,7 @@ rml_g <- function(approach, hat, obs, params = NULL, seed = NULL,
                   validation_split = 0,
                   level_id = FALSE,
                   kset = NULL,
+                  obs_mask = NULL,
                   ...) {
   class(approach) <- c(approach, class(approach))
   UseMethod("rml_g", approach)
@@ -220,10 +221,12 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
                            validation_split = 0,
                            level_id = FALSE,
                            kset = NULL,
+                           obs_mask = NULL,
                            ...) {
   stack <- .stack_series(hat, obs,
                          kset = kset,
                          level_id = level_id,
+                         obs_mask = obs_mask,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -296,7 +299,8 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
         if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
       },
       y_valid              = stack$y_stacked[stack$valid_idx],
-      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx],
+      obs_mask_valid       = if (!is.null(stack$obs_mask_stacked)) stack$obs_mask_stacked[stack$valid_idx] else NULL
     ),
     class = "rml_g_fit"
   )
@@ -309,10 +313,12 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
                           validation_split = 0,
                           level_id = FALSE,
                           kset = NULL,
+                          obs_mask = NULL,
                           ...) {
   stack <- .stack_series(hat, obs,
                          kset = kset,
                          level_id = level_id,
+                         obs_mask = obs_mask,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -378,7 +384,8 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
         if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
       },
       y_valid              = stack$y_stacked[stack$valid_idx],
-      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx],
+      obs_mask_valid       = if (!is.null(stack$obs_mask_stacked)) stack$obs_mask_stacked[stack$valid_idx] else NULL
     ),
     class = "rml_g_fit"
   )
@@ -391,6 +398,7 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
                          validation_split = 0,
                          level_id = FALSE,
                          kset = NULL,
+                         obs_mask = NULL,
                          ...) {
   if (early_stopping_rounds > 0L) {
     cli_inform(
@@ -402,6 +410,7 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
   stack <- .stack_series(hat, obs,
                          kset = kset,
                          level_id = level_id,
+                         obs_mask = obs_mask,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -442,7 +451,8 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
         if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
       },
       y_valid              = stack$y_stacked[stack$valid_idx],
-      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx],
+      obs_mask_valid       = if (!is.null(stack$obs_mask_stacked)) stack$obs_mask_stacked[stack$valid_idx] else NULL
     ),
     class = "rml_g_fit"
   )
@@ -455,10 +465,12 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
                        validation_split = 0,
                        level_id = FALSE,
                        kset = NULL,
+                       obs_mask = NULL,
                        ...) {
   stack <- .stack_series(hat, obs,
                          kset = kset,
                          level_id = level_id,
+                         obs_mask = obs_mask,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -499,7 +511,8 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
         if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
       },
       y_valid              = stack$y_stacked[stack$valid_idx],
-      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx],
+      obs_mask_valid       = if (!is.null(stack$obs_mask_stacked)) stack$obs_mask_stacked[stack$valid_idx] else NULL
     ),
     class = "rml_g_fit"
   )
@@ -524,8 +537,8 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 
 # Internal lightgbm batch fit with warm-start.
 .rml_g_lightgbm_batch <- function(hat, obs_chunk, params, seed,
-                                  nrounds, prev_model, ...) {
-  stack <- .stack_series(hat, obs_chunk)
+                                  nrounds, prev_model, obs_mask = NULL, ...) {
+  stack <- .stack_series(hat, obs_chunk, obs_mask = obs_mask)
   X_train <- cbind(stack$X_stacked[stack$train_idx, , drop = FALSE],
                    series_id = stack$series_id_int[stack$train_idx])
   y_train <- stack$y_stacked[stack$train_idx]
@@ -558,8 +571,8 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 
 # Internal xgboost batch fit with warm-start (xgb_model =).
 .rml_g_xgboost_batch <- function(hat, obs_chunk, params, seed,
-                                 nrounds, prev_model, ...) {
-  stack <- .stack_series(hat, obs_chunk)
+                                 nrounds, prev_model, obs_mask = NULL, ...) {
+  stack <- .stack_series(hat, obs_chunk, obs_mask = obs_mask)
   X_train_mat <- cbind(stack$X_stacked[stack$train_idx, , drop = FALSE],
                        series_id = stack$series_id_int[stack$train_idx])
   dtrain <- xgboost::xgb.DMatrix(
@@ -590,7 +603,7 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
                                early_stopping_rounds, validation_split,
                                batch_size, chunk_strategy,
                                batch_checkpoint_dir, nrounds_per_batch,
-                               level_id = FALSE, kset = NULL, ...) {
+                               level_id = FALSE, kset = NULL, obs_mask = NULL, ...) {
   p        <- NCOL(obs)
   T_obs    <- NROW(obs)
   ncol_hat <- NCOL(hat)
@@ -620,6 +633,7 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
                  params = params, seed = seed,
                  early_stopping_rounds = early_stopping_rounds,
                  validation_split = validation_split,
+                 obs_mask = obs_mask,
                  level_id = level_id, kset = kset, ...))
   }
 
@@ -655,6 +669,7 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
   for (chunk_i in seq_along(chunks)) {
     idx       <- chunks[[chunk_i]]
     obs_chunk <- obs[, idx, drop = FALSE]
+    obs_mask_chunk <- if (!is.null(obs_mask)) obs_mask[, idx, drop = FALSE] else NULL
 
     ckpt_path <- if (!is.null(batch_checkpoint_dir)) {
       file.path(batch_checkpoint_dir, paste0("batch_", chunk_i, ".qs2"))
@@ -672,14 +687,16 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
       fit_chunk <- tryCatch({
         if (approach == "lightgbm") {
           .rml_g_lightgbm_batch(hat, obs_chunk, params, seed,
-                                nrounds_per_batch, prev_model = prev_model, ...)
+                                nrounds_per_batch, prev_model = prev_model,
+                                obs_mask = obs_mask_chunk, ...)
         } else if (approach == "xgboost") {
           .rml_g_xgboost_batch(hat, obs_chunk, params, seed,
-                               nrounds_per_batch, prev_model = prev_model, ...)
+                               nrounds_per_batch, prev_model = prev_model,
+                               obs_mask = obs_mask_chunk, ...)
         } else {
           # ranger / mlr3: no warm-start. Fit fresh on chunk.
           rml_g(approach = approach, hat = hat, obs = obs_chunk,
-                params = params, seed = seed, ...)
+                obs_mask = obs_mask_chunk, params = params, seed = seed, ...)
         }
       }, error = function(e) {
         if (grepl("bad_alloc|cannot allocate|out of memory",
@@ -792,6 +809,12 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
 #'   when using incremental training. Default 50.
 #' @param level_id Logical. Must be `FALSE` (the default).
 #'   [csrml_g()] has no temporal axis; passing `TRUE` signals a user error.
+#' @param obs_mask Optional logical matrix (`T_obs x n_bottom`, `TRUE` = valid
+#'   observation) to exclude structurally missing rows from training. Masked
+#'   series preserve their `series_id` level — predictions still produced at
+#'   test time via ML extrapolation. `"auto"` detects rows where `obs == 0`
+#'   (opt-in; check that zeros are structural). Default `NULL` (no filtering,
+#'   backward compatible).
 #' @param ... passed to [rml_g].
 #' @return Numeric matrix (n × h) of cross-sectional reconciled forecasts, with
 #'   `attr(., "FoReco")` of class `foreco_info`. Use [extract_reconciled_ml]
@@ -831,6 +854,7 @@ csrml_g <- function(base, hat, obs, agg_mat,
                     batch_checkpoint_dir = NULL,
                     nrounds_per_batch = 50L,
                     level_id = FALSE,
+                    obs_mask = NULL,
                     ...) {
   normalize <- match.arg(normalize)
   method <- match.arg(method)
@@ -874,12 +898,14 @@ csrml_g <- function(base, hat, obs, agg_mat,
                        batch_size = batch_size,
                        chunk_strategy = chunk_strategy,
                        batch_checkpoint_dir = batch_checkpoint_dir,
-                       nrounds_per_batch = nrounds_per_batch, ...)
+                       nrounds_per_batch = nrounds_per_batch,
+                       obs_mask = obs_mask, ...)
   } else {
     rml_g(approach = approach, hat = hat_norm, obs = obs,
           params = params, seed = seed,
           early_stopping_rounds = early_stopping_rounds,
-          validation_split = validation_split, ...)
+          validation_split = validation_split,
+          obs_mask = obs_mask, ...)
   }
   fit_obj$agg_mat     <- agg_mat
   fit_obj$norm_params <- norm_params
@@ -1007,6 +1033,12 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #'   temporal-aggregation-level feature to the stacked training matrix.
 #'   `level_id = 1` = finest granularity; `level_id = max` = coarsest.
 #'   Requires the level structure to be derivable from `agg_order`.
+#' @param obs_mask Optional logical matrix (`T_obs x n_bottom`, `TRUE` = valid
+#'   observation) to exclude structurally missing rows from training. Masked
+#'   series preserve their `series_id` level — predictions still produced at
+#'   test time via ML extrapolation. `"auto"` detects rows where `obs == 0`
+#'   (opt-in; check that zeros are structural). Default `NULL` (no filtering,
+#'   backward compatible).
 #' @param ... passed to [rml_g].
 #' @return Named numeric vector matching `FoReco::tebu()` output (length `h × kt`
 #'   where `kt = sum(max(agg_order)/agg_order)`; names like `"k-<order> h-<horizon>"`)
@@ -1048,6 +1080,7 @@ terml_g <- function(base, hat, obs, agg_order,
                     batch_checkpoint_dir = NULL,
                     nrounds_per_batch = 50L,
                     level_id = FALSE,
+                    obs_mask = NULL,
                     ...) {
   normalize <- match.arg(normalize)
   method <- match.arg(method)
@@ -1097,13 +1130,15 @@ terml_g <- function(base, hat, obs, agg_order,
                        chunk_strategy = chunk_strategy,
                        batch_checkpoint_dir = batch_checkpoint_dir,
                        nrounds_per_batch = nrounds_per_batch,
-                       level_id = level_id, kset = agg_order, ...)
+                       level_id = level_id, kset = agg_order,
+                       obs_mask = obs_mask, ...)
   } else {
     rml_g(approach = approach, hat = hat_norm, obs = obs,
           params = params, seed = seed,
           early_stopping_rounds = early_stopping_rounds,
           validation_split = validation_split,
-          level_id = level_id, kset = agg_order, ...)
+          level_id = level_id, kset = agg_order,
+          obs_mask = obs_mask, ...)
   }
   fit_obj$agg_order   <- agg_order
   fit_obj$norm_params <- norm_params
@@ -1215,6 +1250,12 @@ terml_g <- function(base, hat, obs, agg_order,
 #'   temporal-aggregation-level feature to the stacked training matrix.
 #'   `level_id = 1` = finest granularity; `level_id = max` = coarsest.
 #'   Requires the level structure to be derivable from `agg_order`.
+#' @param obs_mask Optional logical matrix (`T_obs x n_bottom`, `TRUE` = valid
+#'   observation) to exclude structurally missing rows from training. Masked
+#'   series preserve their `series_id` level — predictions still produced at
+#'   test time via ML extrapolation. `"auto"` detects rows where `obs == 0`
+#'   (opt-in; check that zeros are structural). Default `NULL` (no filtering,
+#'   backward compatible).
 #' @param ... passed to [rml_g].
 #' @return Numeric matrix (`n × (h × kt)` where `kt = sum(max(agg_order)/agg_order)`)
 #'   of cross-temporal reconciled forecasts, with `attr(., "FoReco")` of class
@@ -1260,6 +1301,7 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     batch_checkpoint_dir = NULL,
                     nrounds_per_batch = 50L,
                     level_id = FALSE,
+                    obs_mask = NULL,
                     ...) {
   normalize <- match.arg(normalize)
   method <- match.arg(method)
@@ -1304,13 +1346,15 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                        chunk_strategy = chunk_strategy,
                        batch_checkpoint_dir = batch_checkpoint_dir,
                        nrounds_per_batch = nrounds_per_batch,
-                       level_id = level_id, kset = agg_order, ...)
+                       level_id = level_id, kset = agg_order,
+                       obs_mask = obs_mask, ...)
   } else {
     rml_g(approach = approach, hat = hat_norm, obs = obs,
           params = params, seed = seed,
           early_stopping_rounds = early_stopping_rounds,
           validation_split = validation_split,
-          level_id = level_id, kset = agg_order, ...)
+          level_id = level_id, kset = agg_order,
+          obs_mask = obs_mask, ...)
   }
   fit_obj$agg_mat     <- agg_mat
   fit_obj$agg_order   <- agg_order
@@ -1398,6 +1442,7 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
                            validation_split = 0,
                            level_id = FALSE,
                            kset = NULL,
+                           obs_mask = NULL,
                            ...) {
   if (!requireNamespace("catboost", quietly = TRUE)) {
     cli_abort(
@@ -1409,6 +1454,7 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
   stack <- .stack_series(hat, obs,
                          kset = kset,
                          level_id = level_id,
+                         obs_mask = obs_mask,
                          validation_split = validation_split,
                          seed = seed)
 
@@ -1470,7 +1516,8 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
         if (isTRUE(level_id)) x[, -ncol(x), drop = FALSE] else x
       },
       y_valid              = stack$y_stacked[stack$valid_idx],
-      series_id_int_valid  = stack$series_id_int[stack$valid_idx]
+      series_id_int_valid  = stack$series_id_int[stack$valid_idx],
+      obs_mask_valid       = if (!is.null(stack$obs_mask_stacked)) stack$obs_mask_stacked[stack$valid_idx] else NULL
     ),
     class = "rml_g_fit"
   )
