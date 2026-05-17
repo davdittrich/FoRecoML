@@ -647,3 +647,21 @@ convert_wide_ct <- function(hat_wide, obs_wide, base_wide, agg_mat, agg_order) {
     base_tall        = `colnames<-`(base_wide, x_colnames)
   )
 }
+
+# Compute cross-sectional level for all series in a hierarchy.
+# Upper (aggregate) series = 0 (coarser); bottom (leaf) series = 1 (finer).
+# This two-level encoding is sufficient for trees to learn level-specific
+# corrections; it does NOT attempt a full depth derivation for non-flat hierarchies.
+#
+# @param agg_mat  n_agg × n_bottom aggregation matrix (rownames = upper series,
+#                 colnames = bottom series).
+# @param series_names character vector of ALL series names (upper + bottom), in
+#                 any order. Typically `wct$series_id_levels` (sorted).
+# @return integer vector named by series_names: 0L for upper, 1L for bottom.
+compute_cs_level <- function(agg_mat, series_names) {
+  upper_names <- rownames(agg_mat)
+  depth       <- setNames(integer(length(series_names)), series_names)
+  depth[series_names %in% upper_names]  <- 0L
+  depth[!(series_names %in% upper_names)] <- 1L
+  depth
+}
