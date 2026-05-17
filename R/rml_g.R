@@ -201,8 +201,6 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
                    series_id = stack$series_id_int[stack$train_idx])
   y_train <- stack$y_stacked[stack$train_idx]
 
-  cat_col_idx <- ncol(X_train)  # 1-based; the last column is series_id.
-
   lgb_params <- list(
     objective   = "regression",
     metric      = "rmse",
@@ -216,7 +214,7 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
   dtrain <- lightgbm::lgb.Dataset(
     data                = X_train,
     label               = y_train,
-    categorical_feature = cat_col_idx,
+    categorical_feature = "series_id",
     free_raw_data       = FALSE
   )
 
@@ -499,7 +497,6 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
   X_train <- cbind(stack$X_stacked[stack$train_idx, , drop = FALSE],
                    series_id = stack$series_id_int[stack$train_idx])
   y_train <- stack$y_stacked[stack$train_idx]
-  cat_col_idx <- ncol(X_train)
 
   lgb_params <- list(
     objective   = "regression",
@@ -513,7 +510,7 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
   dtrain <- lightgbm::lgb.Dataset(
     data                = X_train,
     label               = y_train,
-    categorical_feature = cat_col_idx,
+    categorical_feature = "series_id",
     free_raw_data       = FALSE
   )
 
