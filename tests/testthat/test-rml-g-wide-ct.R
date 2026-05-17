@@ -115,3 +115,37 @@ test_that("terml_g input_format='wide_ct' works", {
   )
   expect_type(r, "double")
 })
+
+test_that("cs_level=TRUE appends column and still produces reconciled matrix", {
+  skip_if_not_installed("lightgbm")
+  fx <- make_wide_ct_fixture()
+  r  <- ctrml_g(
+    base         = fx$base_wide,
+    hat          = fx$hat_wide,
+    obs          = fx$obs_wide,
+    agg_mat      = fx$agg_mat,
+    agg_order    = fx$agg_order,
+    input_format = "wide_ct",
+    cs_level     = TRUE,
+    seed         = 1L
+  )
+  expect_true(is.matrix(r))
+  expect_false(is.null(attr(r, "FoReco")))
+})
+
+test_that("cs_level=TRUE + input_format='tall' raises error", {
+  skip_if_not_installed("lightgbm")
+  agg_mat   <- t(c(1, 1))
+  dimnames(agg_mat) <- list("A", c("B", "C"))
+  agg_order <- c(4L, 2L, 1L)
+  T_obs <- 20L
+  hat  <- matrix(rnorm(T_obs * 7), T_obs, 7)
+  obs  <- matrix(rnorm(T_obs * 2), T_obs, 2, dimnames = list(NULL, c("B", "C")))
+  base <- matrix(rnorm(4 * 7), 4, 7)
+  expect_error(
+    ctrml_g(base = base, hat = hat, obs = obs,
+            agg_mat = agg_mat, agg_order = agg_order,
+            input_format = "tall", cs_level = TRUE, seed = 1L),
+    "wide_ct"
+  )
+})
