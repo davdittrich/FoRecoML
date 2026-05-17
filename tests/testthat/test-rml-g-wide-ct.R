@@ -149,3 +149,52 @@ test_that("cs_level=TRUE + input_format='tall' raises error", {
     "wide_ct"
   )
 })
+
+test_that("wide_ct: lightgbm produces reconciled matrix", {
+  skip_if_not_installed("lightgbm")
+  fx <- make_wide_ct_fixture()
+  colnames(fx$hat_wide) <- paste0("f", seq_len(ncol(fx$hat_wide)))
+  colnames(fx$base_wide) <- paste0("f", seq_len(ncol(fx$base_wide)))
+  r <- ctrml_g(base = fx$base_wide, hat = fx$hat_wide, obs = fx$obs_wide,
+               agg_mat = fx$agg_mat, agg_order = fx$agg_order,
+               approach = "lightgbm", input_format = "wide_ct", seed = 1L)
+  expect_true(is.matrix(r))
+  expect_equal(nrow(r), fx$n_s)
+  expect_equal(ncol(r), fx$kt)
+})
+
+test_that("wide_ct: ranger produces reconciled matrix", {
+  skip_if_not_installed("ranger")
+  fx <- make_wide_ct_fixture()
+  colnames(fx$hat_wide) <- paste0("f", seq_len(ncol(fx$hat_wide)))
+  colnames(fx$base_wide) <- paste0("f", seq_len(ncol(fx$base_wide)))
+  r <- ctrml_g(base = fx$base_wide, hat = fx$hat_wide, obs = fx$obs_wide,
+               agg_mat = fx$agg_mat, agg_order = fx$agg_order,
+               approach = "ranger", input_format = "wide_ct", seed = 1L)
+  expect_true(is.matrix(r))
+  expect_equal(nrow(r), fx$n_s)
+  expect_equal(ncol(r), fx$kt)
+})
+
+test_that("wide_ct: prod-scale agg_order=c(12,6,4,3,2,1) lightgbm", {
+  skip_if_not_installed("lightgbm")
+  set.seed(1)
+  agg_order <- c(12L, 6L, 4L, 3L, 2L, 1L)
+  m  <- 12L
+  kt <- sum(m / agg_order)  # 28
+  n_s <- 3L; n_b <- 2L; n_folds <- 3L
+  agg_mat <- matrix(c(1, 1), 1, 2, dimnames = list("U", c("A", "B")))
+  hat_w <- matrix(rnorm(n_s * n_folds * kt), n_s, n_folds * kt,
+                  dimnames = list(c("U", "A", "B"),
+                                  paste0("f", seq_len(n_folds * kt))))
+  obs_w <- matrix(rnorm(n_b * n_folds * m), n_b, n_folds * m,
+                  dimnames = list(c("A", "B"), NULL))
+  base_w <- matrix(rnorm(n_s * kt), n_s, kt,
+                   dimnames = list(c("U", "A", "B"),
+                                   paste0("f", seq_len(kt))))
+  r <- ctrml_g(base = base_w, hat = hat_w, obs = obs_w,
+               agg_mat = agg_mat, agg_order = agg_order,
+               approach = "lightgbm", input_format = "wide_ct", seed = 1L)
+  expect_true(is.matrix(r))
+  expect_equal(dim(r), c(n_s, kt))
+})
