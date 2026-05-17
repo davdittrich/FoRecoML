@@ -23,7 +23,12 @@
                           obs_mask = NULL,
                           validation_split = 0,
                           seed = NULL,
-                          min_validation_rows = 10L) {
+                          min_validation_rows = 10L,
+                          prebuilt_stack = NULL) {
+  # Escape hatch: when a pre-built stack is supplied (e.g. from convert_wide_ct),
+  # return it immediately — no stacking needed.
+  if (!is.null(prebuilt_stack)) return(prebuilt_stack)
+
   # level_id=TRUE appends a temporal-aggregation-level column to X_stacked.
   # kset must be supplied when level_id=TRUE.
 
@@ -209,6 +214,7 @@ rml_g <- function(approach, hat, obs, params = NULL, seed = NULL,
                   level_id = FALSE,
                   kset = NULL,
                   obs_mask = NULL,
+                  prebuilt_stack = NULL,
                   ...) {
   class(approach) <- c(approach, class(approach))
   UseMethod("rml_g", approach)
@@ -222,13 +228,15 @@ rml_g.lightgbm <- function(approach, hat, obs, params = NULL, seed = NULL,
                            level_id = FALSE,
                            kset = NULL,
                            obs_mask = NULL,
+                           prebuilt_stack = NULL,
                            ...) {
   stack <- .stack_series(hat, obs,
                          kset = kset,
                          level_id = level_id,
                          obs_mask = obs_mask,
                          validation_split = validation_split,
-                         seed = seed)
+                         seed = seed,
+                         prebuilt_stack = prebuilt_stack)
 
   # G6: integer-encoded categorical feature; lightgbm wants the column index
   # marked via `categorical_feature`.
@@ -314,13 +322,15 @@ rml_g.xgboost <- function(approach, hat, obs, params = NULL, seed = NULL,
                           level_id = FALSE,
                           kset = NULL,
                           obs_mask = NULL,
+                          prebuilt_stack = NULL,
                           ...) {
   stack <- .stack_series(hat, obs,
                          kset = kset,
                          level_id = level_id,
                          obs_mask = obs_mask,
                          validation_split = validation_split,
-                         seed = seed)
+                         seed = seed,
+                         prebuilt_stack = prebuilt_stack)
 
   # xgboost has no native categorical handling in this version; use the
   # G5-frozen factor-as-integer encoding directly as a numeric column.
@@ -399,6 +409,7 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
                          level_id = FALSE,
                          kset = NULL,
                          obs_mask = NULL,
+                         prebuilt_stack = NULL,
                          ...) {
   if (early_stopping_rounds > 0L) {
     cli_inform(
@@ -412,7 +423,8 @@ rml_g.ranger <- function(approach, hat, obs, params = NULL, seed = NULL,
                          level_id = level_id,
                          obs_mask = obs_mask,
                          validation_split = validation_split,
-                         seed = seed)
+                         seed = seed,
+                         prebuilt_stack = prebuilt_stack)
 
   df_train <- data.frame(
     stack$X_stacked[stack$train_idx, , drop = FALSE],
@@ -466,13 +478,15 @@ rml_g.mlr3 <- function(approach, hat, obs, params = NULL, seed = NULL,
                        level_id = FALSE,
                        kset = NULL,
                        obs_mask = NULL,
+                       prebuilt_stack = NULL,
                        ...) {
   stack <- .stack_series(hat, obs,
                          kset = kset,
                          level_id = level_id,
                          obs_mask = obs_mask,
                          validation_split = validation_split,
-                         seed = seed)
+                         seed = seed,
+                         prebuilt_stack = prebuilt_stack)
 
   df_train <- data.frame(
     stack$X_stacked[stack$train_idx, , drop = FALSE],
@@ -1039,6 +1053,10 @@ csrml_g <- function(base, hat, obs, agg_mat,
 #'   test time via ML extrapolation. `"auto"` detects rows where `obs == 0`
 #'   (opt-in; check that zeros are structural). Default `NULL` (no filtering,
 #'   backward compatible).
+#' @param input_format Character. `"tall"` (default) expects `hat` as
+#'   `(T_obs × kt)` and `obs` as `(T_obs × 1)`. `"wide_ct"` expects `hat` as
+#'   `(1 × n_folds*kt)`, `obs` as `(1 × T_monthly)`, and `base` as `(1 × kt)`;
+#'   these are reshaped to tall format internally before fitting.
 #' @param ... passed to [rml_g].
 #' @return Named numeric vector matching `FoReco::tebu()` output (length `h × kt`
 #'   where `kt = sum(max(agg_order)/agg_order)`; names like `"k-<order> h-<horizon>"`)
@@ -1072,6 +1090,7 @@ terml_g <- function(base, hat, obs, agg_order,
                     tew = "sum",
                     method = c("bu", "rec"),
                     comb = "ols",
+                    input_format = c("tall", "wide_ct"),
                     res = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
@@ -1085,6 +1104,7 @@ terml_g <- function(base, hat, obs, agg_order,
   normalize <- match.arg(normalize)
   method <- match.arg(method)
   nonneg_method <- match.arg(nonneg_method)
+  input_format <- match.arg(input_format)
   if (identical(comb, "insample")) {
     cli_abort(
       "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
@@ -1098,6 +1118,58 @@ terml_g <- function(base, hat, obs, agg_order,
   if (!is.numeric(base)) {
     cli_abort("{.arg base} must be numeric.", call = NULL)
   }
+
+  # ── wide_ct dispatch for terml_g ────────────────────────────────────────────
+  # wide_ct for temporal-only: hat is (1 × n_folds*kt), obs is (1 × T_monthly),
+  # base is (1 × kt). Reshape to the standard tall format and recurse.
+  if (input_format == "wide_ct") {
+    m   <- max(agg_order)
+    kt  <- sum(m / agg_order)
+    hat <- as.matrix(hat)
+    obs <- as.matrix(obs)
+    if (nrow(hat) != 1L)
+      cli_abort(
+        "{.arg hat} for terml_g with input_format='wide_ct' must have 1 row (single temporal series); got {nrow(hat)} rows.",
+        call = NULL
+      )
+    n_folds <- ncol(hat) %/% kt
+    if (ncol(hat) != n_folds * kt)
+      cli_abort(
+        "{.arg hat} columns ({ncol(hat)}) must be a multiple of kt = {kt}.",
+        call = NULL
+      )
+    T_monthly       <- ncol(obs)
+    months_per_fold <- T_monthly %/% n_folds
+    # Reshape hat: (1 × n_folds*kt) → (n_folds × kt)
+    hat_tall <- matrix(0, n_folds, kt)
+    for (t in seq_len(n_folds)) {
+      hat_tall[t, ] <- hat[1L, ((t - 1L) * kt + 1L):(t * kt)]
+    }
+    # Aggregate obs by fold: (1 × T_monthly) → (n_folds × 1)
+    obs_tall <- matrix(0, n_folds, 1L)
+    for (t in seq_len(n_folds)) {
+      fold_months <- ((t - 1L) * months_per_fold + 1L):(t * months_per_fold)
+      obs_tall[t, 1L] <- mean(obs[1L, fold_months])
+    }
+    # base_wide is (1 × kt); terml_g tall needs (h_hf × kt) where h_hf = h*m.
+    # For h=1: replicate the single feature row m times so nrow(base) %% m == 0.
+    base_row   <- as.numeric(base[1L, ])
+    base_tall  <- matrix(rep(base_row, m), nrow = m, ncol = kt, byrow = TRUE)
+    return(terml_g(base = base_tall, hat = hat_tall, obs = obs_tall,
+                   agg_order = agg_order, approach = approach,
+                   normalize = normalize, scale_fn = scale_fn,
+                   params = params, seed = seed, sntz = sntz, round = round,
+                   nonneg_method = nonneg_method, tew = tew, method = method,
+                   comb = comb, input_format = "tall", res = res,
+                   early_stopping_rounds = early_stopping_rounds,
+                   validation_split = validation_split,
+                   batch_size = batch_size, chunk_strategy = chunk_strategy,
+                   batch_checkpoint_dir = batch_checkpoint_dir,
+                   nrounds_per_batch = nrounds_per_batch,
+                   level_id = level_id, obs_mask = obs_mask, ...))
+  }
+  # ── end wide_ct ─────────────────────────────────────────────────────────────
+
   if (ncol(obs) != 1L) {
     cli_abort(
       "{.arg obs} for terml_g must have exactly 1 column (single bottom-level temporal series).",
@@ -1256,6 +1328,11 @@ terml_g <- function(base, hat, obs, agg_order,
 #'   test time via ML extrapolation. `"auto"` detects rows where `obs == 0`
 #'   (opt-in; check that zeros are structural). Default `NULL` (no filtering,
 #'   backward compatible).
+#' @param input_format Character. `"tall"` (default, backward-compatible) expects
+#'   `hat` as `(T_obs × kt)` and `obs` as `(T_obs × n_bottom)`. `"wide_ct"` expects
+#'   `hat` as `(n_series × n_folds*kt)`, `obs` as `(n_bottom × T_monthly)`, and
+#'   `base` as `(n_series × kt)`; the stacking is handled internally via
+#'   [convert_wide_ct] and a pre-built stack bypasses [.stack_series].
 #' @param ... passed to [rml_g].
 #' @return Numeric matrix (`n × (h × kt)` where `kt = sum(max(agg_order)/agg_order)`)
 #'   of cross-temporal reconciled forecasts, with `attr(., "FoReco")` of class
@@ -1293,6 +1370,7 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
                     tew = "sum",
                     method = c("bu", "rec"),
                     comb = "ols",
+                    input_format = c("tall", "wide_ct"),
                     res = NULL,
                     early_stopping_rounds = 0L,
                     validation_split = 0,
@@ -1306,6 +1384,7 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
   normalize <- match.arg(normalize)
   method <- match.arg(method)
   nonneg_method <- match.arg(nonneg_method)
+  input_format <- match.arg(input_format)
   if (identical(comb, "insample")) {
     cli_abort(
       "comb='insample' is not a valid FoReco combination method; use 'ols', 'shr', 'sam', 'wlsv', etc.",
@@ -1319,6 +1398,154 @@ ctrml_g <- function(base, hat, obs, agg_mat, agg_order,
   if (!is.numeric(base)) {
     cli_abort("{.arg base} must be numeric.", call = NULL)
   }
+
+  # ── wide_ct dispatch ────────────────────────────────────────────────────────
+  # When input_format="wide_ct", hat is (n_series × n_folds*kt) and obs is
+  # (n_bottom × T_monthly). convert_wide_ct() produces the pre-stacked
+  # (X_stacked, y_stacked, series_id) triple. We bypass .stack_series() by
+  # passing a prebuilt_stack directly to rml_g().
+  if (input_format == "wide_ct") {
+    wct <- convert_wide_ct(hat_wide = hat, obs_wide = obs,
+                           base_wide = base, agg_mat = agg_mat,
+                           agg_order = agg_order)
+
+    n_rows <- nrow(wct$X_stacked)
+
+    # Optional normalization applied to stacked features.
+    X_fit <- wct$X_stacked
+    norm_params <- NULL
+    if (normalize != "none") {
+      nr          <- normalize_stack(X_fit, method = normalize, scale_fn = scale_fn)
+      X_fit       <- nr$X_norm
+      norm_params <- nr
+    }
+
+    prebuilt_stack <- list(
+      X_stacked        = X_fit,
+      y_stacked        = wct$y_stacked,
+      series_id_factor = factor(wct$series_id_levels[wct$series_id_int],
+                                levels = wct$series_id_levels),
+      series_id_int    = wct$series_id_int,
+      series_id_levels = wct$series_id_levels,
+      norm_params      = NULL,       # normalization tracked in norm_params above
+      train_idx        = seq_len(n_rows),
+      valid_idx        = integer(0L),
+      obs_mask_stacked = NULL
+    )
+
+    # Fit: hat/obs args are ignored because prebuilt_stack takes precedence.
+    fit_obj <- rml_g(approach = approach,
+                     hat      = wct$X_stacked,
+                     obs      = matrix(wct$y_stacked, ncol = 1L),
+                     params   = params,
+                     seed     = seed,
+                     early_stopping_rounds  = early_stopping_rounds,
+                     validation_split       = validation_split,
+                     prebuilt_stack         = prebuilt_stack,
+                     ...)
+    fit_obj$agg_mat     <- agg_mat
+    fit_obj$agg_order   <- agg_order
+    fit_obj$norm_params <- norm_params
+    fit_obj$framework   <- "ct"
+
+    # Predict: base_tall is (n_series × kt); pass series_id explicitly so each
+    # row is predicted with its own series identity (no replication broadcast).
+    base_features   <- apply_norm_params(wct$base_tall, fit_obj$norm_params)
+    # Rows of base_tall are in rownames(hat) order; map to series_id_levels
+    base_rownames   <- if (!is.null(rownames(base))) rownames(base) else
+                         paste0("S", seq_len(nrow(base)))
+    bts_vec_all     <- predict(fit_obj, newdata = base_features,
+                               series_id = base_rownames)
+    # bts_vec_all has predictions for ALL n_series (upper + bottom).
+    # ctbu needs only the n_bottom bottom series rows, in sid_levels order.
+    bottom_names    <- sort(rownames(obs))
+    bottom_idx      <- match(bottom_names, wct$series_id_levels)
+    if (any(is.na(bottom_idx))) {
+      cli_abort(
+        "Some bottom-series names not found in series_id_levels; check rownames(obs) vs rownames(hat).",
+        call = NULL
+      )
+    }
+    bts_vec         <- bts_vec_all[bottom_idx]
+
+    # Build ctbu input: n_bottom × m, each row = predicted mean repeated m times.
+    # The model predicts one aggregated value per bottom series (the mean over the
+    # fold's m monthly periods). Distributing equally across m gives ctbu its
+    # required finest-frequency input.
+    m   <- max(agg_order)
+    nb  <- length(bottom_names)
+    # ctbu expects nb × (h * m); for h=1 each row has m copies of the prediction.
+    ctbu_base <- matrix(rep(bts_vec, times = m), nrow = nb, ncol = m)
+    rownames(ctbu_base) <- bottom_names
+
+    if (method == "rec") {
+      if (!identical(comb, "ols"))
+        cli_abort(
+          paste0("comb='{comb}' with method='rec' for ctrml_g requires full-sample residuals;",
+                 " only comb='ols' is supported. Use method='bu' for other comb values."),
+          call = NULL
+        )
+      base_full_ct_raw <- FoReco::ctbu(ctbu_base,
+                                       agg_mat   = fit_obj$agg_mat,
+                                       agg_order = fit_obj$agg_order,
+                                       tew       = tew)
+      base_full_ct <- unclass(base_full_ct_raw)
+      attr(base_full_ct, "FoReco") <- NULL
+      reco_mat <- FoReco::ctrec(
+        base      = base_full_ct,
+        agg_mat   = fit_obj$agg_mat,
+        cons_mat  = NULL,
+        agg_order = fit_obj$agg_order,
+        tew       = tew,
+        comb      = comb,
+        res       = NULL
+      )
+      attr(reco_mat, "FoReco") <- new_foreco_info(list(
+        fit = fit_obj, framework = "Cross-temporal",
+        forecast_horizon = 1L, rfun = "ctrml_g", ml = approach
+      ))
+      return(reco_mat)
+    }
+    if (!identical(nonneg_method, "sntz")) {
+      sparsity_pct <- mean(bts_vec < 0) * 100
+      if (sparsity_pct > 30)
+        cli_warn(
+          "Base predictions are {round(sparsity_pct, 1)}% negative; {.val {nonneg_method}} may produce degenerate face. Consider {.val 'sntz'}.",
+          call = NULL
+        )
+      base_full_ct_raw <- FoReco::ctbu(ctbu_base,
+                                       agg_mat   = fit_obj$agg_mat,
+                                       agg_order = fit_obj$agg_order,
+                                       tew       = tew)
+      base_full_ct <- unclass(base_full_ct_raw)
+      attr(base_full_ct, "FoReco") <- NULL
+      reco_mat <- FoReco::ctrec(
+        base      = base_full_ct,
+        agg_mat   = fit_obj$agg_mat,
+        cons_mat  = NULL,
+        agg_order = fit_obj$agg_order,
+        tew       = tew,
+        nn        = nonneg_method,
+        res       = NULL
+      )
+      attr(reco_mat, "FoReco") <- new_foreco_info(list(
+        fit = fit_obj, framework = "Cross-temporal",
+        forecast_horizon = 1L, rfun = "ctrml_g", ml = approach
+      ))
+      return(reco_mat)
+    }
+    reco_mat <- FoReco::ctbu(ctbu_base,
+                             agg_mat   = fit_obj$agg_mat,
+                             agg_order = fit_obj$agg_order,
+                             tew = tew, sntz = sntz, round = round)
+    attr(reco_mat, "FoReco") <- new_foreco_info(list(
+      fit = fit_obj, framework = "Cross-temporal",
+      forecast_horizon = 1L,
+      rfun = "ctrml_g", ml = approach))
+    return(reco_mat)
+  }
+  # ── end wide_ct ─────────────────────────────────────────────────────────────
+
   if (ncol(base) != ncol(hat)) {
     cli_abort(
       "{.arg base} must have {ncol(hat)} columns (matching {.arg hat}); got {ncol(base)}.",
@@ -1443,6 +1670,7 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
                            level_id = FALSE,
                            kset = NULL,
                            obs_mask = NULL,
+                           prebuilt_stack = NULL,
                            ...) {
   if (!requireNamespace("catboost", quietly = TRUE)) {
     cli_abort(
@@ -1456,7 +1684,8 @@ rml_g.catboost <- function(approach, hat, obs, params = NULL, seed = NULL,
                          level_id = level_id,
                          obs_mask = obs_mask,
                          validation_split = validation_split,
-                         seed = seed)
+                         seed = seed,
+                         prebuilt_stack = prebuilt_stack)
 
   X_train <- cbind(stack$X_stacked[stack$train_idx, , drop = FALSE],
                    series_id = stack$series_id_int[stack$train_idx])
