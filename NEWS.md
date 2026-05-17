@@ -2,6 +2,14 @@
 
 ## New features
 
+* `csrml_g()`, `terml_g()`, `ctrml_g()`, and `rml_g()` accept `obs_mask` to exclude
+  structurally missing observations from training. Series with all-zero (or `NA`)
+  observations across training time can cause catboost to error and LightGBM/XGBoost
+  to learn degenerate zero predictors. `obs_mask = NULL` (default) preserves current
+  behavior. `obs_mask = "auto"` auto-detects rows where `obs == 0`; supply an explicit
+  logical matrix for precise control. Masked series still receive predictions at test
+  time via ML extrapolation from unmasked neighbors.
+
 * `csrml_g()`, `terml_g()`, and `ctrml_g()` accept `nonneg_method` to select the
   non-negative reconciliation approach. `"sntz"` (default, near-optimal per
   Girolimetto 2025) clips negatives after bottom-up. `"bpv"`, `"nfca"`, `"nnic"`,
