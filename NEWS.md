@@ -30,6 +30,22 @@
 
 * `terml_g()` and `ctrml_g()` accept `level_id = TRUE` (default `FALSE`) to add an ordered-integer temporal-aggregation-level feature to the stacked training matrix (1 = finest granularity, max = coarsest). Improves global ML correction accuracy on hierarchies with strong level-specific variance. `csrml_g()` rejects this argument with an informative error. See the "Feature engineering for global ML" article.
 
+* `ctrml_g()` and `terml_g()` accept `input_format = "wide_ct"` for FoReco's
+  canonical CT wide matrix layout. When `"wide_ct"`: `hat` is
+  `n_series × (n_folds × kt)` (series as rows), `obs` is
+  `n_bottom × T_monthly`, and `base` is `n_series × kt`. Internally FoRecoML
+  builds one training observation per (series, fold) pair with the series's own
+  CT feature vector — enabling per-series base forecasts as ML features.
+  `hat_wide` should have column names for LightGBM compatibility.
+  Default `"tall"` preserves current behavior.
+
+* `ctrml_g()` gains `cs_level = FALSE`. When `cs_level = TRUE` and
+  `input_format = "wide_ct"`, a `cs_level` column is appended to the stacked
+  training matrix: `0` for upper (aggregate) series, `1` for bottom (leaf)
+  series. This gives tree-based learners an explicit cross-sectional depth
+  signal. Requires `input_format = "wide_ct"`; passing `cs_level = TRUE` with
+  `input_format = "tall"` raises an informative error.
+
 * `csrml_g()`, `terml_g()`, and `ctrml_g()` accept `method = "rec"` to use
   FoReco's optimal combination reconciliation (`csrec`, `terec`, `ctrec`)
   instead of bottom-up. The `comb = "ols"` (default) works without residuals;

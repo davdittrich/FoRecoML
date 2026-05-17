@@ -609,9 +609,18 @@ convert_wide_ct <- function(hat_wide, obs_wide, base_wide, agg_mat, agg_order) {
   snames     <- if (!is.null(rownames(hat_wide))) rownames(hat_wide) else paste0("S", seq_len(n_series))
   sid_levels <- sort(unique(snames))
 
+  # Column names for X_stacked: use the first kt colnames of hat_wide (one fold's
+  # worth) so that LightGBM sees consistent feature names at train and predict time.
+  # Auto-generate if hat_wide has no colnames to avoid empty-string colnames from cbind.
+  x_colnames <- if (!is.null(colnames(hat_wide))) {
+    colnames(hat_wide)[seq_len(kt)]
+  } else {
+    paste0("V", seq_len(kt))
+  }
+
   # Build stacked training matrix: one row per (series, fold) pair
   n_rows  <- n_series * n_folds
-  X_stack <- matrix(0, n_rows, kt)
+  X_stack <- matrix(0, n_rows, kt, dimnames = list(NULL, x_colnames))
   y_stack <- numeric(n_rows)
   sid_int <- integer(n_rows)
   row_i   <- 1L
@@ -634,6 +643,7 @@ convert_wide_ct <- function(hat_wide, obs_wide, base_wide, agg_mat, agg_order) {
     n_folds          = n_folds,
     n_series         = n_series,
     n_bottom         = n_bottom,
-    base_tall        = base_wide   # n_series × kt — used as newdata in predict step
+    # base_tall: n_series × kt, colnames synced with X_stacked for LightGBM compat.
+    base_tall        = `colnames<-`(base_wide, x_colnames)
   )
 }

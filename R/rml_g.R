@@ -1141,7 +1141,15 @@ terml_g <- function(base, hat, obs, agg_order,
     T_monthly       <- ncol(obs)
     months_per_fold <- T_monthly %/% n_folds
     # Reshape hat: (1 × n_folds*kt) → (n_folds × kt)
-    hat_tall <- matrix(0, n_folds, kt)
+    # Propagate colnames from the first kt columns of hat so that LightGBM sees
+    # consistent feature names between the training matrix and newdata (base).
+    # Auto-generate if hat has no colnames to avoid empty-string colnames from cbind.
+    hat_cn   <- if (!is.null(colnames(hat))) {
+      colnames(hat)[seq_len(kt)]
+    } else {
+      paste0("V", seq_len(kt))
+    }
+    hat_tall <- matrix(0, n_folds, kt, dimnames = list(NULL, hat_cn))
     for (t in seq_len(n_folds)) {
       hat_tall[t, ] <- hat[1L, ((t - 1L) * kt + 1L):(t * kt)]
     }
@@ -1154,7 +1162,8 @@ terml_g <- function(base, hat, obs, agg_order,
     # base_wide is (1 × kt); terml_g tall needs (h_hf × kt) where h_hf = h*m.
     # For h=1: replicate the single feature row m times so nrow(base) %% m == 0.
     base_row   <- as.numeric(base[1L, ])
-    base_tall  <- matrix(rep(base_row, m), nrow = m, ncol = kt, byrow = TRUE)
+    base_tall  <- matrix(rep(base_row, m), nrow = m, ncol = kt, byrow = TRUE,
+                         dimnames = list(NULL, hat_cn))
     return(terml_g(base = base_tall, hat = hat_tall, obs = obs_tall,
                    agg_order = agg_order, approach = approach,
                    normalize = normalize, scale_fn = scale_fn,
