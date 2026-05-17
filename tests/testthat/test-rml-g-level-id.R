@@ -157,3 +157,53 @@ test_that("T7: predict aborts when ncol(newdata) mismatches ncol_hat from level_
   correct_newdata <- matrix(rnorm(4 * kt), 4, kt)
   expect_no_error(predict(fit, newdata = correct_newdata, series_id = "S1"))
 })
+
+# ---------------------------------------------------------------------------
+# BUG-2 regression: ctrml_g(level_id=TRUE) end-to-end on default + chunked
+# ---------------------------------------------------------------------------
+
+.bug2_fixture <- function() {
+  set.seed(1)
+  agg_mat <- t(c(1, 1))
+  dimnames(agg_mat) <- list("A", c("B", "C"))
+  agg_order <- c(4L, 2L, 1L)
+  m <- 4L; kt <- 7L; n <- 3L; ncf <- n * kt
+  T_obs <- 60L; h <- 2L
+  hat  <- matrix(rnorm(T_obs * ncf), T_obs, ncf,
+                 dimnames = list(NULL, paste0("F", seq_len(ncf))))
+  obs  <- matrix(rnorm(T_obs * 2L), T_obs, 2L,
+                 dimnames = list(NULL, c("B", "C")))
+  base <- matrix(rnorm(h * m * ncf), h * m, ncf,
+                 dimnames = list(NULL, paste0("F", seq_len(ncf))))
+  list(base = base, hat = hat, obs = obs,
+       agg_mat = agg_mat, agg_order = agg_order)
+}
+
+test_that("BUG-2.1: ctrml_g(level_id=TRUE) default path works end-to-end", {
+  skip_if_not_installed("lightgbm")
+  fx <- .bug2_fixture()
+  r <- ctrml_g(
+    base = fx$base, hat = fx$hat, obs = fx$obs,
+    agg_mat = fx$agg_mat, agg_order = fx$agg_order,
+    level_id = TRUE, seed = 1L
+  )
+  expect_true(is.matrix(r))
+  expect_false(is.null(attr(r, "FoReco")))
+})
+
+test_that("BUG-2.2: ctrml_g(level_id=TRUE, batch_size=1L) chunked path works", {
+  skip_if_not_installed("lightgbm")
+  fx <- .bug2_fixture()
+  r_default <- ctrml_g(
+    base = fx$base, hat = fx$hat, obs = fx$obs,
+    agg_mat = fx$agg_mat, agg_order = fx$agg_order,
+    level_id = TRUE, seed = 1L
+  )
+  r_chunked <- ctrml_g(
+    base = fx$base, hat = fx$hat, obs = fx$obs,
+    agg_mat = fx$agg_mat, agg_order = fx$agg_order,
+    level_id = TRUE, batch_size = 1L, seed = 1L
+  )
+  expect_true(is.matrix(r_chunked))
+  expect_equal(dim(r_chunked), dim(r_default))
+})
