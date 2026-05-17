@@ -20,6 +20,7 @@
 # first T_obs rows, series 2 the next T_obs rows, and so on.
 .stack_series <- function(hat, obs, kset = NULL,
                           level_id = FALSE,
+                          obs_mask = NULL,
                           validation_split = 0,
                           seed = NULL,
                           min_validation_rows = 10L) {
@@ -123,6 +124,36 @@
     valid_idx <- integer(0L)
   }
 
+  # obs_mask filtering: exclude structurally missing observations from training.
+  # Masked rows are excluded from X_train/y_train but series_id_levels and valid_idx
+  # are preserved — masked series still get predictions at test time.
+  obs_mask_stacked <- NULL
+  if (!is.null(obs_mask)) {
+    if (identical(obs_mask, "auto")) {
+      cli_warn(
+        c("obs_mask='auto' excludes rows where obs==0.",
+          "i" = "Verify zeros are structural (missing), not valid zero-demand observations."),
+        call = NULL
+      )
+      obs_mask_mat <- obs_mat != 0        # T_obs x p logical
+    } else {
+      obs_mask_mat <- as.matrix(obs_mask)
+      if (!identical(dim(obs_mask_mat), c(T_obs, p))) {
+        cli_abort(
+          "{.arg obs_mask} must have the same shape as {.arg obs} ({T_obs}×{p}); got {nrow(obs_mask_mat)}×{ncol(obs_mask_mat)}.",
+          call = NULL
+        )
+      }
+      if (!is.logical(obs_mask_mat)) {
+        cli_abort("{.arg obs_mask} must be a logical matrix.", call = NULL)
+      }
+    }
+    # Stacked mask (column-major, same order as y_stacked): series 1 first, etc.
+    obs_mask_stacked <- as.logical(obs_mask_mat)
+    # Restrict train_idx to unmasked rows only
+    train_idx <- intersect(train_idx, which(obs_mask_stacked))
+  }
+
   list(
     X_stacked        = X_stacked,
     y_stacked        = y_stacked,
@@ -131,7 +162,8 @@
     series_id_levels = series_id_levels,
     norm_params      = NULL,
     train_idx        = train_idx,
-    valid_idx        = valid_idx
+    valid_idx        = valid_idx,
+    obs_mask_stacked = obs_mask_stacked
   )
 }
 
