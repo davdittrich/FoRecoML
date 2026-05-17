@@ -550,6 +550,9 @@ compute_rec_residuals <- function(fit_obj) {
   preds     <- predict(fit_obj, newdata = fit_obj$X_valid,
                        series_id = series_ids)
   resid_vec <- fit_obj$y_valid - preds
+  if (!is.null(fit_obj$obs_mask_valid) && any(!fit_obj$obs_mask_valid)) {
+    resid_vec[!fit_obj$obs_mask_valid] <- NA_real_
+  }
   p         <- length(fit_obj$series_id_levels)
   n_valid_per_series <- length(fit_obj$valid_idx) %/% p
   T_valid <- n_valid_per_series
